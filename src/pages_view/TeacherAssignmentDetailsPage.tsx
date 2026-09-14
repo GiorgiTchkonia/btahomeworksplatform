@@ -308,8 +308,8 @@ export default function TeacherAssignmentDetailsPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                setPreviewFileUrl(submission.fileUrl);
-                                setPreviewFileName(submission.fileName);
+                                setPreviewFileUrl(submission.fileUrl || null);
+                                setPreviewFileName(submission.fileName || '');
                               }}
                               className="inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
                             >
