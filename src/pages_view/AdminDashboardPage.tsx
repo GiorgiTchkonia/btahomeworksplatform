@@ -5,15 +5,9 @@ import {
   Users,
   School,
   GraduationCap,
-  Plus,
-  Trash2,
   Search,
-  X,
-  AlertCircle,
-  CheckCircle2,
   Lock,
   Mail,
-  User as UserIcon,
   BookOpen,
   Phone,
 } from 'lucide-react';
@@ -32,14 +26,6 @@ export default function AdminDashboardPage() {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'ALL' | 'TEACHER' | 'STUDENT'>('ALL');
-
-  // Modals state
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<SafeUser | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const resetForm = () => {};
 
   const loadData = async () => {
     try {
@@ -75,21 +61,6 @@ export default function AdminDashboardPage() {
     loadData();
   }, []);
 
-  const handleOpenAddModal = (role: 'TEACHER' | 'STUDENT') => {
-    alert("უსაფრთხოების მიზნით, ახალი მომხმარებლის დამატება ახლა ხდება პირდაპირ Supabase Dashboard-იდან (Authentication -> Users განყოფილება).");
-  };
-
-  const handleOpenDeleteModal = (u: SafeUser) => {
-    alert("უსაფრთხოების მიზნით, მომხმარებლის წაშლა ახლა ხდება პირდაპირ Supabase Dashboard-იდან (Authentication -> Users განყოფილება).");
-  };
-
-  const submitAddUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDeleteUser = async () => {
-  };
-
   // Combine and filter user lists
   const allUsers: SafeUser[] = [...teachers, ...students];
 
@@ -120,14 +91,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-emerald-600 text-white font-semibold rounded-2xl shadow-xl shadow-emerald-200/50 animate-bounce">
-          <CheckCircle2 className="w-5 h-5 text-emerald-200" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* Header Banner */}
       <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-slate-900/10 border border-slate-800">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -146,14 +109,11 @@ export default function AdminDashboardPage() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                resetForm();
-                setAddModalOpen(true);
-              }}
+              onClick={() => window.open('https://sazjrfsxnyxkxyxnqquv.supabase.co/project/sazjrfsxnyxkxyxnqquv/auth/users', '_blank')}
               className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all text-sm shrink-0"
             >
-              <Plus className="w-5 h-5" />
-              <span>ახალი მომხმარებელი</span>
+              <Shield className="w-5 h-5" />
+              <span>მართვა Supabase-ში</span>
             </button>
           </div>
         </div>
@@ -202,7 +162,7 @@ export default function AdminDashboardPage() {
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">დაცვის დონე</div>
             <div className="text-sm font-black text-emerald-600 mt-0.5 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              Bcrypt 12 + Signed Cookie
+              Supabase Auth + RLS
             </div>
           </div>
         </div>
@@ -268,7 +228,6 @@ export default function AdminDashboardPage() {
                 <th className="py-4 px-6">მომხმარებელი</th>
                 <th className="py-4 px-6">როლი</th>
                 <th className="py-4 px-6">დამატებითი ინფორმაცია</th>
-                <th className="py-4 px-6 text-right">მოქმედება</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
@@ -343,16 +302,6 @@ export default function AdminDashboardPage() {
                             <span>კლასი: {student.grade}</span>
                           </div>
                         ) : null}
-                      </td>
-
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => setUserToDelete({ id: u.id, name: u.name, role: u.role, email: u.email } as any)}
-                          title="მომხმარებლის წაშლა"
-                          className="inline-flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </td>
                     </tr>
                   );

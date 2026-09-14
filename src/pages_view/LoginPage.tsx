@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { GraduationCap, School, KeyRound, Mail, AlertCircle, ArrowRight, Shield } from 'lucide-react';
-import { Role } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 interface LoginPageProps {
@@ -10,7 +9,6 @@ interface LoginPageProps {
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [, navigate] = useLocation();
-  const [role, setRole] = useState<Role>('TEACHER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +21,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
 
@@ -33,6 +31,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         return;
       }
 
+      setLoading(false);
       // We no longer need to check role manually here because App.tsx 
       // will trigger checkUser() via onAuthStateChange and redirect appropriately.
       if (onLoginSuccess) onLoginSuccess();
@@ -62,60 +61,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-6 sm:p-8">
-          {/* Role Toggle */}
-          <div className="mb-6">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">
-              ვინ ბრძანდებით?
-            </label>
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setRole('TEACHER');
-                  setError('');
-                }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
-                  role === 'TEACHER'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <School className="w-4 h-4" />
-                <span className="truncate">მასწავლებელი</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRole('STUDENT');
-                  setError('');
-                }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
-                  role === 'STUDENT'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <GraduationCap className="w-4 h-4" />
-                <span className="truncate">მოსწავლე</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRole('ADMIN');
-                  setError('');
-                }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
-                  role === 'ADMIN'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span className="truncate">ადმინი</span>
-              </button>
-            </div>
-          </div>
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
@@ -138,7 +83,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={role === 'ADMIN' ? 'admin@academy.ge' : role === 'TEACHER' ? 'nino.gelashvili@academy.ge' : 'luka.beridze@academy.ge'}
+                  placeholder="ელ. ფოსტა"
                   className="w-full pl-11 pr-4 py-3 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm transition-all outline-none"
                 />
               </div>

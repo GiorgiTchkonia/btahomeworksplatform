@@ -38,9 +38,6 @@ export default function TeacherDashboardPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Search/Filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterSubjectId, setFilterSubjectId] = useState('ALL');
 
   const loadData = async () => {
     try {

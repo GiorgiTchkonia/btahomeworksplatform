@@ -119,8 +119,11 @@ export default function ProfileModal({
     try {
       const payload: any = {
         name: name.trim(),
-        email: email.trim(),
       };
+
+      if (email.trim() !== currentUser.email) {
+        payload.email = email.trim();
+      }
 
       if (isTeacher) {
         payload.phone = phone.trim();
@@ -134,7 +137,12 @@ export default function ProfileModal({
         payload.newPassword = newPassword;
       }
 
-      const updatedProfile = await updateProfile(currentUser.id, payload);
+      const updatedProfile = await updateProfile(
+        currentUser.id,
+        currentUser.email,
+        payload,
+        currentPassword || undefined
+      );
       setSuccessMsg('პროფილის მონაცემები წარმატებით განახლდა!');
       onUserUpdated(updatedProfile as SafeUser);
 
@@ -147,9 +155,9 @@ export default function ProfileModal({
       setTimeout(() => {
         setSuccessMsg('');
       }, 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('სერვერთან კავშირი შეწყდა');
+      setError(err.message || 'სერვერთან კავშირი შეწყდა');
     } finally {
       setLoading(false);
     }

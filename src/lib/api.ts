@@ -5,8 +5,19 @@ import { User, StudentAssignmentWithStatus, SubjectProgress, AssignmentWithMeta,
 // File Upload
 // ---------------------------------------------------------
 export async function uploadFile(file: File) {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${Math.random()}.${fileExt}`;
+  const maxFileSize = 15 * 1024 * 1024;
+  if (file.size > maxFileSize) {
+    throw new Error('ფაილის ზომა არ უნდა აღემატებოდეს 15MB-ს.');
+  }
+
+  const fileExt = file.name.split('.').pop()?.toLowerCase();
+  const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'txt', 'zip', 'rar'];
+  
+  if (!fileExt || !allowedExtensions.includes(fileExt)) {
+    throw new Error('ფაილის ფორმატი დაუშვებელია.');
+  }
+
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
   const filePath = `${fileName}`;
 
   const { error, data } = await supabase.storage
@@ -31,11 +42,14 @@ export async function uploadFile(file: File) {
 // ---------------------------------------------------------
 export async function getStudentDashboardData(studentId: string) {
   // 1. Fetch all subjects
-  const { data: subjects } = await supabase.from('subjects').select('*, profiles!teacher_id(name)');
+  const { data: subjects, error: error1 } = await supabase.from('subjects').select('*, profiles!teacher_id(name)');
+  if (error1) throw new Error(error1.message);
   // 2. Fetch all assignments
-  const { data: assignments } = await supabase.from('assignments').select('*');
+  const { data: assignments, error: error2 } = await supabase.from('assignments').select('*');
+  if (error2) throw new Error(error2.message);
   // 3. Fetch submissions for this student
-  const { data: submissions } = await supabase.from('submissions').select('*').eq('student_id', studentId);
+  const { data: submissions, error: error3 } = await supabase.from('submissions').select('*').eq('student_id', studentId);
+  if (error3) throw new Error(error3.message);
 
   const subjectMap = new Map(subjects?.map(s => [s.id, s]));
   const studentSubmissionMap = new Map(submissions?.map(s => [s.assignment_id, s]));
@@ -136,7 +150,7 @@ export async function submitHomework(params: {
     .select('id')
     .eq('assignment_id', params.assignmentId)
     .eq('student_id', params.studentId)
-    .single();
+    .maybeSingle();
 
   const now = new Date().toISOString();
 
@@ -174,10 +188,14 @@ export async function submitHomework(params: {
 // Teacher Dashboard
 // ---------------------------------------------------------
 export async function getTeacherDashboardData(teacherId: string) {
-  const { data: subjects } = await supabase.from('subjects').select('*').eq('teacher_id', teacherId);
-  const { data: assignments } = await supabase.from('assignments').select('*').eq('teacher_id', teacherId);
-  const { data: submissions } = await supabase.from('submissions').select('assignment_id, status, profiles!inner(*)').eq('profiles.role', 'STUDENT');
-  const { data: students } = await supabase.from('profiles').select('*').eq('role', 'STUDENT');
+  const { data: subjects, error: error1 } = await supabase.from('subjects').select('*').eq('teacher_id', teacherId);
+  if (error1) throw new Error(error1.message);
+  const { data: assignments, error: error2 } = await supabase.from('assignments').select('*').eq('teacher_id', teacherId);
+  if (error2) throw new Error(error2.message);
+  const { data: submissions, error: error3 } = await supabase.from('submissions').select('assignment_id, status, profiles!inner(*)').eq('profiles.role', 'STUDENT');
+  if (error3) throw new Error(error3.message);
+  const { data: students, error: error4 } = await supabase.from('profiles').select('*').eq('role', 'STUDENT');
+  if (error4) throw new Error(error4.message);
   const totalStudents = students?.length || 0;
 
   const submissionCounts = new Map(); // assignmentId -> { approved, declined, pending }
@@ -239,14 +257,19 @@ export async function deleteAssignment(assignmentId: string) {
 }
 
 export async function getAssignmentDetails(assignmentId: string) {
-  const { data: assignment } = await supabase.from('assignments').select('*').eq('id', assignmentId).single();
+  const { data: assignment, error: error1 } = await supabase.from('assignments').select('*').eq('id', assignmentId).single();
+  if (error1) throw new Error(error1.message);
   if (!assignment) return null;
 
-  const { data: subject } = await supabase.from('subjects').select('*').eq('id', assignment.subject_id).single();
-  const { data: teacher } = await supabase.from('profiles').select('*').eq('id', assignment.teacher_id).single();
+  const { data: subject, error: error2 } = await supabase.from('subjects').select('*').eq('id', assignment.subject_id).single();
+  if (error2) throw new Error(error2.message);
+  const { data: teacher, error: error3 } = await supabase.from('profiles').select('*').eq('id', assignment.teacher_id).single();
+  if (error3) throw new Error(error3.message);
   
-  const { data: submissions } = await supabase.from('submissions').select('*').eq('assignment_id', assignmentId);
-  const { data: students } = await supabase.from('profiles').select('*').eq('role', 'STUDENT');
+  const { data: submissions, error: error4 } = await supabase.from('submissions').select('*').eq('assignment_id', assignmentId);
+  if (error4) throw new Error(error4.message);
+  const { data: students, error: error5 } = await supabase.from('profiles').select('*').eq('role', 'STUDENT');
+  if (error5) throw new Error(error5.message);
 
   let approvedCount = 0;
   let declinedCount = 0;
@@ -315,7 +338,8 @@ export async function reviewSubmission(submissionId: string, status: 'APPROVED' 
 // Admin
 // ---------------------------------------------------------
 export async function getAllUsersForAdmin() {
-  const { data: profiles } = await supabase.from('profiles').select('*');
+  const { data: profiles, error } = await supabase.from('profiles').select('*');
+  if (error) throw new Error(error.message);
   const teachers = profiles?.filter(p => p.role === 'TEACHER') || [];
   const students = profiles?.filter(p => p.role === 'STUDENT') || [];
   const admins = profiles?.filter(p => p.role === 'ADMIN') || [];
@@ -333,13 +357,14 @@ export async function deleteWhitelistUser(userId: string) {
 }
 
 export async function getWhitelist() {
-  const { data: profiles } = await supabase.from('profiles').select('id, name, role, subject, grade, email');
+  const { data: profiles, error } = await supabase.from('profiles').select('id, name, role, subject, grade, email');
+  if (error) throw new Error(error.message);
   const teachers = profiles?.filter(p => p.role === 'TEACHER') || [];
   const students = profiles?.filter(p => p.role === 'STUDENT') || [];
   return { teachers, students };
 }
 
-export async function updateProfile(userId: string, updates: any) {
+export async function updateProfile(userId: string, email: string, updates: any, currentPassword?: string) {
   const payload: any = {};
   if (updates.name) payload.name = updates.name;
   if (updates.subject) payload.subject = updates.subject;
@@ -351,11 +376,24 @@ export async function updateProfile(userId: string, updates: any) {
     if (error) throw error;
   }
   
+  if (updates.email) {
+    const { error } = await supabase.auth.updateUser({ email: updates.email });
+    if (error) throw error;
+  }
+  
   if (updates.newPassword) {
+    if (!currentPassword) {
+      throw new Error('მიმდინარე პაროლი არასწორია');
+    }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+    if (signInError) {
+      throw new Error('მიმდინარე პაროლი არასწორია');
+    }
     const { error } = await supabase.auth.updateUser({ password: updates.newPassword });
     if (error) throw error;
   }
   
-  const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  const { data: updatedProfile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  if (profileError) throw new Error(profileError.message);
   return updatedProfile;
 }

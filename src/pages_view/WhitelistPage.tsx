@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { School, GraduationCap, ArrowLeft, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
-import { SafeTeacherUser, SafeStudentUser, Role } from '@/types';
+import { SafeTeacherUser, SafeStudentUser } from '@/types';
 import { getWhitelist } from '@/lib/api';
 
-interface WhitelistPageProps {
-  onLoginSuccess?: () => void;
-}
-
-export default function WhitelistPage({ onLoginSuccess }: WhitelistPageProps) {
+export default function WhitelistPage() {
   const [, navigate] = useLocation();
   const [teachers, setTeachers] = useState<SafeTeacherUser[]>([]);
   const [students, setStudents] = useState<SafeStudentUser[]>([]);
@@ -23,12 +19,6 @@ export default function WhitelistPage({ onLoginSuccess }: WhitelistPageProps) {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
-
-  const loginAs = async (email: string, role: Role) => {
-    // Whitelist page no longer stores or uses passwords —
-    // redirect to login page for security
-    navigate('/login');
-  };
 
   return (
     <div className="space-y-8 pb-16">
@@ -53,7 +43,7 @@ export default function WhitelistPage({ onLoginSuccess }: WhitelistPageProps) {
             აკადემიის მასწავლებლები და მოსწავლეები
           </h1>
           <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-            პლატფორმა იყენებს მარტივ და დაცულ Whitelist მოდელს. ნებისმიერი ახალი მასწავლებლის ან მოსწავლის დამატება ხდება პირდაპირ <code className="bg-white/10 px-1.5 py-0.5 rounded text-indigo-300">data/whitelist.json</code> ფაილში.
+            პლატფორმა იყენებს მარტივ და დაცულ Whitelist მოდელს. ნებისმიერი ახალი მასწავლებლის ან მოსწავლის დამატება ხდება პირდაპირ Supabase-ის პანელიდან.
           </p>
         </div>
 

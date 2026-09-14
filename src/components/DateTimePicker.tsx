@@ -35,7 +35,8 @@ function pad(n: number): string {
 }
 
 function formatValue(year: number, month: number, day: number, hour: number, minute: number): string {
-  return `${year}-${pad(month + 1)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+  const d = new Date(year, month, day, hour, minute);
+  return d.toISOString();
 }
 
 export default function DateTimePicker({ value, onChange }: DateTimePickerProps) {
@@ -43,12 +44,15 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Parsed state
-  const initialDate = value ? new Date(value) : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // Default to +2 days
+  let initialDate = value ? new Date(value) : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // Default to +2 days
+  if (isNaN(initialDate.getTime())) {
+    initialDate = new Date();
+  }
   const [viewYear, setViewYear] = useState(initialDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(initialDate.getMonth());
   const [selectedDay, setSelectedDay] = useState(initialDate.getDate());
-  const [selectedHour, setSelectedHour] = useState(value ? new Date(value).getHours() : 23);
-  const [selectedMinute, setSelectedMinute] = useState(value ? new Date(value).getMinutes() : 59);
+  const [selectedHour, setSelectedHour] = useState(value && !isNaN(new Date(value).getTime()) ? new Date(value).getHours() : 23);
+  const [selectedMinute, setSelectedMinute] = useState(value && !isNaN(new Date(value).getTime()) ? new Date(value).getMinutes() : 59);
 
   // Sync from props if value changes externally
   useEffect(() => {

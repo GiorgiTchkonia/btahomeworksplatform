@@ -44,13 +44,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    checkUser();
-    
     // Subscribe to auth state changes (e.g. login/logout)
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setLoading(false);
+      } else {
         checkUser();
       }
     });
@@ -124,7 +123,10 @@ export default function App() {
           </Route>
 
           <Route path="/whitelist">
-            {() => <WhitelistPage onLoginSuccess={checkUser} />}
+            {() => {
+              if (!user) return <Redirect to="/login" />;
+              return <WhitelistPage />;
+            }}
           </Route>
 
           {/* 404 Fallback */}

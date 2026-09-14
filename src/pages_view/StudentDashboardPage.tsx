@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { 
   GraduationCap, 
@@ -160,23 +160,40 @@ export default function StudentDashboardPage() {
   }
 
   // Filter assignments
-  const filteredAssignments = assignments.filter((a) => {
-    if (selectedSubjectFilter !== 'ALL' && a.subjectId !== selectedSubjectFilter) {
-      return false;
-    }
-    if (filter === 'ALL') return true;
-    if (filter === 'TODO') return !a.submission || a.submission.status === 'DECLINED';
-    if (filter === 'SUBMITTED') return a.submission && a.submission.status === 'SUBMITTED';
-    if (filter === 'APPROVED') return a.submission && a.submission.status === 'APPROVED';
-    if (filter === 'DECLINED') return a.submission && a.submission.status === 'DECLINED';
-    return true;
-  });
+  const filteredAssignments = useMemo(() => {
+    return assignments.filter((a) => {
+      if (selectedSubjectFilter !== 'ALL' && a.subjectId !== selectedSubjectFilter) {
+        return false;
+      }
+      if (filter === 'ALL') return true;
+      if (filter === 'TODO') return !a.submission || a.submission.status === 'DECLINED';
+      if (filter === 'SUBMITTED') return a.submission && a.submission.status === 'SUBMITTED';
+      if (filter === 'APPROVED') return a.submission && a.submission.status === 'APPROVED';
+      if (filter === 'DECLINED') return a.submission && a.submission.status === 'DECLINED';
+      return true;
+    });
+  }, [assignments, filter, selectedSubjectFilter]);
 
-  const totalAssignmentsCount = assignments.length;
-  const approvedCount = assignments.filter((a) => a.submission?.status === 'APPROVED').length;
-  const pendingCount = assignments.filter((a) => a.submission?.status === 'SUBMITTED').length;
-  const declinedCount = assignments.filter((a) => a.submission?.status === 'DECLINED').length;
-  const todoCount = assignments.filter((a) => !a.submission).length + declinedCount;
+  const {
+    totalAssignmentsCount,
+    approvedCount,
+    pendingCount,
+    declinedCount,
+    todoCount,
+  } = useMemo(() => {
+    const total = assignments.length;
+    const approved = assignments.filter((a) => a.submission?.status === 'APPROVED').length;
+    const pending = assignments.filter((a) => a.submission?.status === 'SUBMITTED').length;
+    const declined = assignments.filter((a) => a.submission?.status === 'DECLINED').length;
+    const todo = assignments.filter((a) => !a.submission).length + declined;
+    return {
+      totalAssignmentsCount: total,
+      approvedCount: approved,
+      pendingCount: pending,
+      declinedCount: declined,
+      todoCount: todo,
+    };
+  }, [assignments]);
 
   return (
     <div className="space-y-8 pb-16">

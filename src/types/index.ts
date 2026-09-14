@@ -4,7 +4,6 @@ export interface TeacherUser {
   id: string;
   name: string;
   email: string;
-  password?: string;
   role: 'TEACHER';
   subject: string;
   phone?: string;
@@ -14,7 +13,6 @@ export interface StudentUser {
   id: string;
   name: string;
   email: string;
-  password?: string;
   role: 'STUDENT';
   grade: string;
 }
@@ -23,16 +21,15 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  password?: string;
   role: 'ADMIN';
 }
 
 export type User = TeacherUser | StudentUser | AdminUser;
 
 // Safe versions never include the password field
-export type SafeTeacherUser = Omit<TeacherUser, 'password'>;
-export type SafeStudentUser = Omit<StudentUser, 'password'>;
-export type SafeAdminUser = Omit<AdminUser, 'password'>;
+export type SafeTeacherUser = TeacherUser;
+export type SafeStudentUser = StudentUser;
+export type SafeAdminUser = AdminUser;
 export type SafeUser = SafeTeacherUser | SafeStudentUser | SafeAdminUser;
 
 export interface Subject {

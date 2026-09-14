@@ -51,9 +51,6 @@ export default function TeacherAssignmentDetailsPage() {
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>('');
 
-  // Filter state
-  const [filter, setFilter] = useState<'ALL' | 'SUBMITTED' | 'APPROVED' | 'DECLINED'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Lock body scroll and handle Escape key for modals
   useEffect(() => {
@@ -490,6 +487,7 @@ export default function TeacherAssignmentDetailsPage() {
               {/\.pdf($|\?)/i.test(previewFileUrl) ? (
                 <iframe
                   src={previewFileUrl}
+                  sandbox="allow-same-origin"
                   className="w-full h-full min-h-[550px] rounded-xl border border-slate-200 bg-white"
                 />
               ) : /\.(png|jpe?g|gif|webp|svg)($|\?)/i.test(previewFileUrl) || /\.(png|jpe?g|gif|webp|svg)($|\?)/i.test(previewFileName) ? (
