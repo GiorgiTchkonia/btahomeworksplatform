@@ -72,8 +72,8 @@ export default function AdminDashboardPage() {
     // Search query
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    const matchName = u.name.toLowerCase().includes(q);
-    const matchEmail = u.email.toLowerCase().includes(q);
+    const matchName = (u.name || '').toLowerCase().includes(q);
+    const matchEmail = (u.email || '').toLowerCase().includes(q);
     const matchSubject = (u as SafeTeacherUser).subject?.toLowerCase().includes(q);
     const matchGrade = (u as SafeStudentUser).grade?.toLowerCase().includes(q);
 
@@ -256,7 +256,7 @@ export default function AdminDashboardPage() {
                                 : 'bg-emerald-100 text-emerald-700'
                             }`}
                           >
-                            {u.name.charAt(0)}
+                            {u.name ? u.name.charAt(0) : '?'}
                           </div>
                           <div>
                             <div className="font-bold text-slate-900">{u.name}</div>

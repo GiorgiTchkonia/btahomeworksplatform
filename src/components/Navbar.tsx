@@ -87,7 +87,7 @@ export default function Navbar({ user, onLogout, onUserUpdated }: NavbarProps) {
                         : 'bg-indigo-100 text-indigo-700'
                     }`}
                   >
-                    {user.name.charAt(0)}
+                    {user.name ? user.name.charAt(0) : '?'}
                   </div>
                   <div className="hidden sm:block text-left min-w-0">
                     <p className="text-xs font-bold text-slate-900 leading-tight truncate max-w-[130px] md:max-w-[190px] group-hover:text-indigo-600 transition-colors">

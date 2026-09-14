@@ -185,7 +185,7 @@ export default function ProfileModal({
                     : 'bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-200'
                 }`}
               >
-                {currentUser.name.charAt(0)}
+                {currentUser.name ? currentUser.name.charAt(0) : '?'}
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
