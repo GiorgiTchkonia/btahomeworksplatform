@@ -19,7 +19,7 @@ export default function Navbar({ user, onLogout, onUserUpdated }: NavbarProps) {
     try {
       await supabase.auth.signOut();
       if (onLogout) onLogout();
-      navigate('/login');
+      window.location.href = '/login';
     } catch (error) {
       console.error('Logout error:', error);
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { School, GraduationCap, ArrowLeft, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import { School, GraduationCap, ArrowLeft, Mail, ShieldCheck, X } from 'lucide-react';
 import { SafeTeacherUser, SafeStudentUser } from '@/types';
 import { getWhitelist } from '@/lib/api';
 
@@ -9,6 +9,7 @@ export default function WhitelistPage() {
   const [teachers, setTeachers] = useState<SafeTeacherUser[]>([]);
   const [students, setStudents] = useState<SafeStudentUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<SafeTeacherUser | SafeStudentUser | null>(null);
 
   useEffect(() => {
     getWhitelist()
@@ -37,13 +38,13 @@ export default function WhitelistPage() {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold">
             <ShieldCheck className="w-4 h-4" />
-            <span>მომხმარებელთა ავტორიზებული სია (Whitelist)</span>
+            <span>მომხმარებელთა დადასტურებული სია (Whitelist)</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            აკადემიის მასწავლებლები და მოსწავლეები
+            რეგისტრირებული მასწავლებლები და მოსწავლეები
           </h1>
           <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-            პლატფორმა იყენებს მარტივ და დაცულ Whitelist მოდელს. ნებისმიერი ახალი მასწავლებლის ან მოსწავლის დამატება ხდება პირდაპირ Supabase-ის პანელიდან.
+            პლატფორმაზე დაშვებული მასწავლებლები და მოსწავლეების Whitelist სია. მითითებული პირები შეძლებენ პლატფორმაზე შეუფერხებლად ავტორიზაციას.
           </p>
         </div>
 
@@ -72,7 +73,8 @@ export default function WhitelistPage() {
               {teachers.map((teacher) => (
                 <div
                   key={teacher.id}
-                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  onClick={() => setSelectedUser(teacher)}
+                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all"
                 >
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -88,14 +90,6 @@ export default function WhitelistPage() {
                       </span>
                     </div>
                   </div>
-
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white font-bold text-xs transition-colors shadow-sm shrink-0"
-                  >
-                    <span>შესვლა</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
                 </div>
               ))}
             </div>
@@ -112,7 +106,8 @@ export default function WhitelistPage() {
               {students.map((student) => (
                 <div
                   key={student.id}
-                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  onClick={() => setSelectedUser(student)}
+                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all"
                 >
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -128,16 +123,58 @@ export default function WhitelistPage() {
                       </span>
                     </div>
                   </div>
-
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white font-bold text-xs transition-colors shadow-sm shrink-0"
-                  >
-                    <span>შესვლა</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Profile Modal */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            {/* Header/Cover */}
+            <div className={`h-24 w-full ${selectedUser.role === 'TEACHER' ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors backdrop-blur-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Avatar */}
+            <div className="px-6 flex flex-col items-center -mt-12">
+              <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-bold text-white shadow-xl border-4 border-white ${selectedUser.role === 'TEACHER' ? 'bg-indigo-500' : 'bg-emerald-500'}`}>
+                {selectedUser.name ? selectedUser.name.charAt(0) : '?'}
+              </div>
+              
+              <h3 className="mt-3 text-xl font-bold text-slate-900 text-center">
+                {selectedUser.name}
+              </h3>
+              <p className="text-sm font-semibold text-slate-500 mt-1">
+                {selectedUser.role === 'TEACHER' ? 'მასწავლებელი' : 'მოსწავლე'}
+              </p>
+            </div>
+
+            {/* Details */}
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500 font-medium">ელ. ფოსტა</span>
+                  <span className="font-bold text-slate-900 truncate max-w-[150px]">{selectedUser.email}</span>
+                </div>
+                <div className="h-px bg-slate-200"></div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500 font-medium">
+                    {selectedUser.role === 'TEACHER' ? 'საგანი' : 'კლასი'}
+                  </span>
+                  <span className="font-bold text-slate-900">
+                    {selectedUser.role === 'TEACHER' ? (selectedUser as SafeTeacherUser).subject : (selectedUser as SafeStudentUser).grade}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
