@@ -1,3 +1,4 @@
+import { supabaseAdmin } from './supabase-admin';
 import { supabase } from './supabase';
 import { User, StudentAssignmentWithStatus, SubjectProgress, AssignmentWithMeta, Submission } from '@/types';
 
@@ -346,14 +347,86 @@ export async function getAllUsersForAdmin() {
   return { teachers, students, admins };
 }
 
-// Note: Adding a user securely requires Supabase Admin API which should run in a Vercel function.
-// For now, since the admin flow relied on a custom backend, we can implement it via Edge Function or just return an error for now until the user requests it.
 export async function addWhitelistUser(user: any) {
-  throw new Error("Add user requires admin API. Please use Supabase dashboard to create users.");
+  if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized.");
+  
+  // 1. Create user in auth
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: user.email,
+    password: user.password,
+    email_confirm: true
+  });
+  
+  if (authError) throw new Error(authError.message);
+  
+  // 2. Add to profiles table
+  const newUserId = authData.user.id;
+  const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+    id: newUserId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    grade: user.grade || null,
+    subject: user.subject || null,
+    phone: user.phone || null
+  });
+  
+  if (profileError) {
+    // rollback
+    await supabaseAdmin.auth.admin.deleteUser(newUserId);
+    throw new Error(profileError.message);
+  }
+  
+  return authData.user;
+}
+
+export async function adminUpdateUser(userId: string, updates: any) {
+  if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized.");
+  
+  // Update auth if email or password changed
+  const authUpdates: any = {};
+  if (updates.email) authUpdates.email = updates.email;
+  if (updates.password) authUpdates.password = updates.password;
+  
+  if (Object.keys(authUpdates).length > 0) {
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
+    if (authError) throw new Error(authError.message);
+  }
+  
+  // Update profiles table
+  const profileUpdates: any = {};
+  if (updates.name) profileUpdates.name = updates.name;
+  if (updates.role) profileUpdates.role = updates.role;
+  if (updates.email) profileUpdates.email = updates.email; // keep in sync
+  
+  if (updates.role === 'TEACHER') {
+    profileUpdates.subject = updates.subject || null;
+    profileUpdates.phone = updates.phone || null;
+    profileUpdates.grade = null;
+  } else if (updates.role === 'STUDENT') {
+    profileUpdates.grade = updates.grade || null;
+    profileUpdates.subject = null;
+    profileUpdates.phone = null;
+  } else if (updates.role === 'ADMIN') {
+    profileUpdates.grade = null;
+    profileUpdates.subject = null;
+    profileUpdates.phone = null;
+  }
+  
+  if (Object.keys(profileUpdates).length > 0) {
+    const { error: profileError } = await supabaseAdmin.from('profiles').update(profileUpdates).eq('id', userId);
+    if (profileError) throw new Error(profileError.message);
+  }
+  
+  return true;
 }
 
 export async function deleteWhitelistUser(userId: string) {
-  throw new Error("Delete user requires admin API. Please use Supabase dashboard to delete users.");
+  if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized.");
+  
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error) throw new Error(error.message);
+  return true;
 }
 
 export async function getWhitelist() {
