@@ -257,8 +257,10 @@ export default function StudentDashboardPage() {
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                    {sub.subjectName.charAt(0)}
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0 bg-${sub.color}-500`}
+                  >
+                    {sub.subjectName ? sub.subjectName.charAt(0) : '?'}
                   </div>
                   <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                     {sub.percentage}%

@@ -394,6 +394,6 @@ export async function updateProfile(userId: string, email: string, updates: any,
   }
   
   const { data: updatedProfile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
-  if (profileError) throw new Error(profileError.message);
+  if (profileError) throw profileError;
   return updatedProfile;
 }

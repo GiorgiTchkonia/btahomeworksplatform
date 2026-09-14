@@ -50,14 +50,16 @@ export default function Navbar({ user, onLogout, onUserUpdated }: NavbarProps) {
           {/* User Section */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Whitelist Directory Link */}
-            <Link
-              href="/whitelist"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-colors"
-              title="სია (Whitelist)"
-            >
-              <Users className="w-4 h-4 text-slate-500" />
-              <span className="hidden md:inline">სია (Whitelist)</span>
-            </Link>
+            {user && (
+              <Link
+                href="/whitelist"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-colors"
+                title="სია (Whitelist)"
+              >
+                <Users className="w-4 h-4 text-slate-500" />
+                <span className="hidden md:inline">სია (Whitelist)</span>
+              </Link>
+            )}
 
             {/* Admin Dashboard Quick Link */}
             {user?.role === 'ADMIN' && (

@@ -55,16 +55,20 @@ export default function ProfileModal({
     if (isOpen) {
       setName(currentUser.name || '');
       setEmail(currentUser.email || '');
-      setPhone((currentUser as SafeTeacherUser).phone || '');
-      setSubject((currentUser as SafeTeacherUser).subject || '');
-      setGrade((currentUser as SafeStudentUser).grade || 'X კლასი');
-      setCurrentPassword('');
+      if (currentUser.role === 'TEACHER') {
+        const t = currentUser as SafeTeacherUser;
+        setPhone(t.phone || '');
+        setSubject(t.subject || '');
+      } else if (currentUser.role === 'STUDENT') {
+        const s = currentUser as SafeStudentUser;
+        setGrade(s.grade || '');
+      }
       setNewPassword('');
       setConfirmPassword('');
       setError('');
       setSuccessMsg('');
     }
-  }, [isOpen, currentUser]);
+  }, [isOpen]);
 
   // Lock body scroll and handle Escape key for modal
   useEffect(() => {

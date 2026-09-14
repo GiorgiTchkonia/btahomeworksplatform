@@ -252,7 +252,7 @@ export default function TeacherAssignmentDetailsPage() {
                   {/* Student Info */}
                   <div className="flex items-center gap-3.5 min-w-[200px]">
                     <div className="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-base shadow-sm">
-                      {student.name.charAt(0)}
+                      {student.name ? student.name.charAt(0) : '?'}
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900 text-base">{student.name}</h4>
