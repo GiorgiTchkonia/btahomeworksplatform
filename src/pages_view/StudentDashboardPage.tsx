@@ -151,14 +151,6 @@ export default function StudentDashboardPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
   // Filter assignments
   const filteredAssignments = useMemo(() => {
     return assignments.filter((a) => {
@@ -186,6 +178,7 @@ export default function StudentDashboardPage() {
     const pending = assignments.filter((a) => a.submission?.status === 'SUBMITTED').length;
     const declined = assignments.filter((a) => a.submission?.status === 'DECLINED').length;
     const todo = assignments.filter((a) => !a.submission).length + declined;
+
     return {
       totalAssignmentsCount: total,
       approvedCount: approved,
@@ -194,6 +187,14 @@ export default function StudentDashboardPage() {
       todoCount: todo,
     };
   }, [assignments]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-16">

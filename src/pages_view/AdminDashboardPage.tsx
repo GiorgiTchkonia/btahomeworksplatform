@@ -74,8 +74,12 @@ export default function AdminDashboardPage() {
     const q = searchQuery.toLowerCase();
     const matchName = (u.name || '').toLowerCase().includes(q);
     const matchEmail = (u.email || '').toLowerCase().includes(q);
-    const matchSubject = (u as SafeTeacherUser).subject?.toLowerCase().includes(q);
-    const matchGrade = (u as SafeStudentUser).grade?.toLowerCase().includes(q);
+    
+    const teacherSubject = (u as SafeTeacherUser).subject || '';
+    const matchSubject = teacherSubject.toLowerCase().includes(q);
+    
+    const studentGrade = (u as SafeStudentUser).grade || '';
+    const matchGrade = studentGrade.toLowerCase().includes(q);
 
     return matchName || matchEmail || matchSubject || matchGrade;
   });
