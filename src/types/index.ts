@@ -49,6 +49,7 @@ export interface Assignment {
   dueDate: string; // ISO date string or YYYY-MM-DDTHH:mm
   attachmentUrl?: string;
   attachmentName?: string;
+  allowedFormats?: string[];
   createdAt: string;
 }
 
@@ -66,9 +67,10 @@ export interface Submission {
   assignmentId: string;
   studentId: string;
   studentName: string;
-  fileUrl: string;
-  fileName: string;
-  fileSize: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: string;
+  submissionLink?: string;
   studentComment?: string;
   status: SubmissionStatus;
   teacherFeedback?: string;

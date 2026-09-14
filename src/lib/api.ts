@@ -2,6 +2,8 @@ import { supabaseAdmin } from './supabase-admin';
 import { supabase } from './supabase';
 import { User, StudentAssignmentWithStatus, SubjectProgress, AssignmentWithMeta, Submission } from '@/types';
 
+import imageCompression from 'browser-image-compression';
+
 // ---------------------------------------------------------
 // File Upload
 // ---------------------------------------------------------
@@ -18,12 +20,27 @@ export async function uploadFile(file: File) {
     throw new Error('ფაილის ფორმატი დაუშვებელია.');
   }
 
+  let finalFile = file;
+  if (['jpg', 'jpeg', 'png'].includes(fileExt)) {
+    try {
+      const options = {
+        maxSizeMB: 1, // დააპატარავებს 1MB-მდე
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+      };
+      const compressedBlob = await imageCompression(file, options);
+      finalFile = new File([compressedBlob], file.name, { type: compressedBlob.type });
+    } catch (e) {
+      console.error('Image compression failed:', e);
+    }
+  }
+
   const fileName = `${crypto.randomUUID()}.${fileExt}`;
   const filePath = `${fileName}`;
 
   const { error, data } = await supabase.storage
     .from('homework-files')
-    .upload(filePath, file);
+    .upload(filePath, finalFile);
 
   if (error) throw error;
 
@@ -31,9 +48,9 @@ export async function uploadFile(file: File) {
     .from('homework-files')
     .getPublicUrl(filePath);
 
-  // Return formatted size (e.g., 2.1 MB)
-  const sizeMb = file.size / (1024 * 1024);
-  const formattedSize = sizeMb < 1 ? `${Math.round(file.size / 1024)} KB` : `${sizeMb.toFixed(1)} MB`;
+  // Return formatted size (e.g., 2.1 MB) based on finalFile
+  const sizeMb = finalFile.size / (1024 * 1024);
+  const formattedSize = sizeMb < 1 ? `${Math.round(finalFile.size / 1024)} KB` : `${sizeMb.toFixed(1)} MB`;
 
   return { fileUrl: publicUrl, fileName: file.name, fileSize: formattedSize };
 }
@@ -112,6 +129,7 @@ export async function getStudentDashboardData(studentId: string) {
         dueDate: a.due_date,
         attachmentUrl: a.attachment_url,
         attachmentName: a.attachment_name,
+        allowedFormats: a.allowed_formats || [],
         createdAt: a.created_at,
         subjectName: subject ? subject.name : 'უცნობი',
         subjectColor: subject ? subject.color : 'indigo',
@@ -124,6 +142,7 @@ export async function getStudentDashboardData(studentId: string) {
           fileUrl: submission.file_url,
           fileName: submission.file_name,
           fileSize: submission.file_size,
+          submissionLink: submission.submission_link,
           studentComment: submission.student_comment,
           status: submission.status,
           teacherFeedback: submission.teacher_feedback,
@@ -141,11 +160,24 @@ export async function submitHomework(params: {
   assignmentId: string;
   studentId: string;
   studentName: string;
-  fileUrl: string;
-  fileName: string;
-  fileSize: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: string;
+  submissionLink?: string;
   studentComment?: string;
 }) {
+  // Fetch assignment to check due date
+  const { data: assignmentData, error: assignmentError } = await supabase.from('assignments')
+    .select('due_date')
+    .eq('id', params.assignmentId)
+    .single();
+    
+  if (assignmentError) throw new Error('დავალება ვერ მოიძებნა');
+  
+  if (new Date(assignmentData.due_date).getTime() < Date.now()) {
+    throw new Error('დავალების ჩაბარების ვადა ამოიწურა. ჩაბარება შეუძლებელია.');
+  }
+
   // Check if exists
   const { data: existing } = await supabase.from('submissions')
     .select('id')
@@ -157,9 +189,10 @@ export async function submitHomework(params: {
 
   if (existing) {
     const { data, error } = await supabase.from('submissions').update({
-      file_url: params.fileUrl,
-      file_name: params.fileName,
-      file_size: params.fileSize,
+      file_url: params.fileUrl || null,
+      file_name: params.fileName || null,
+      file_size: params.fileSize || null,
+      submission_link: params.submissionLink || null,
       student_comment: params.studentComment || '',
       status: 'SUBMITTED',
       teacher_feedback: null,
@@ -173,9 +206,10 @@ export async function submitHomework(params: {
       assignment_id: params.assignmentId,
       student_id: params.studentId,
       student_name: params.studentName,
-      file_url: params.fileUrl,
-      file_name: params.fileName,
-      file_size: params.fileSize,
+      file_url: params.fileUrl || null,
+      file_name: params.fileName || null,
+      file_size: params.fileSize || null,
+      submission_link: params.submissionLink || null,
       student_comment: params.studentComment || '',
       status: 'SUBMITTED',
       submitted_at: now
@@ -183,6 +217,29 @@ export async function submitHomework(params: {
     if (error) throw error;
     return data;
   }
+}
+
+export async function cancelSubmission(submissionId: string) {
+  // Get assignment ID for this submission
+  const { data: subData } = await supabase.from('submissions')
+    .select('assignment_id')
+    .eq('id', submissionId)
+    .single();
+
+  if (subData) {
+    const { data: assignmentData } = await supabase.from('assignments')
+      .select('due_date')
+      .eq('id', subData.assignment_id)
+      .single();
+
+    if (assignmentData && new Date(assignmentData.due_date).getTime() < Date.now()) {
+      throw new Error('დავალების ვადა ამოიწურა. ფაილის წაშლა ან შეცვლა შეუძლებელია.');
+    }
+  }
+
+  const { error } = await supabase.from('submissions').delete().eq('id', submissionId);
+  if (error) throw error;
+  return true;
 }
 
 // ---------------------------------------------------------
@@ -227,6 +284,7 @@ export async function getTeacherDashboardData(teacherId: string) {
       dueDate: a.due_date,
       attachmentUrl: a.attachment_url,
       attachmentName: a.attachment_name,
+      allowedFormats: a.allowed_formats || [],
       createdAt: a.created_at,
       subjectName: subjectMap.get(a.subject_id) || 'უცნობი',
       submissionsCount: counts.approved + counts.declined + counts.pending,
@@ -245,7 +303,8 @@ export async function createAssignment(params: any) {
     description: params.description,
     due_date: params.dueDate,
     attachment_url: params.attachmentUrl,
-    attachment_name: params.attachmentName
+    attachment_name: params.attachmentName,
+    allowed_formats: params.allowedFormats || []
   }).select().single();
   if (error) throw error;
   return data;
@@ -284,6 +343,7 @@ export async function getAssignmentDetails(assignmentId: string) {
     fileUrl: s.file_url,
     fileName: s.file_name,
     fileSize: s.file_size,
+    submissionLink: s.submission_link,
     studentComment: s.student_comment,
     status: s.status,
     teacherFeedback: s.teacher_feedback,
@@ -312,6 +372,7 @@ export async function getAssignmentDetails(assignmentId: string) {
       dueDate: assignment.due_date,
       attachmentUrl: assignment.attachment_url,
       attachmentName: assignment.attachment_name,
+      allowedFormats: assignment.allowed_formats || [],
       createdAt: assignment.created_at
     },
     subject,

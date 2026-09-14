@@ -290,21 +290,35 @@ export default function TeacherAssignmentDetailsPage() {
                           </span>
                         </div>
 
-                        {/* File preview button */}
+                        {/* File preview or Link button */}
                         <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPreviewFileUrl(submission.fileUrl);
-                              setPreviewFileName(submission.fileName);
-                            }}
-                            className="inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-md">
-                              ნახვა: {submission.fileName} ({submission.fileSize})
-                            </span>
-                          </button>
+                          {submission.submissionLink ? (
+                            <a
+                              href={submission.submissionLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-md">
+                                ბმულის გახსნა
+                              </span>
+                            </a>
+                          ) : submission.fileUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreviewFileUrl(submission.fileUrl);
+                                setPreviewFileName(submission.fileName);
+                              }}
+                              className="inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-md">
+                                ნახვა: {submission.fileName} ({submission.fileSize})
+                              </span>
+                            </button>
+                          ) : null}
                         </div>
 
                         {/* Student Comment */}

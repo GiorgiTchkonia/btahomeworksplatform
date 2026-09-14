@@ -17,7 +17,7 @@ import {
   Send
 } from 'lucide-react';
 import { StudentUser, SubjectProgress, Submission, StudentAssignmentWithStatus } from '@/types';
-import { getStudentDashboardData, submitHomework, uploadFile } from '@/lib/api';
+import { getStudentDashboardData, submitHomework, uploadFile, cancelSubmission } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 export default function StudentDashboardPage() {
@@ -37,6 +37,8 @@ export default function StudentDashboardPage() {
   const [fileUrl, setFileUrl] = useState('');
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState('');
+  const [submissionLink, setSubmissionLink] = useState('');
+  const [submitMode, setSubmitMode] = useState<'FILE' | 'LINK'>('FILE');
   const [studentComment, setStudentComment] = useState('');
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -114,9 +116,11 @@ export default function StudentDashboardPage() {
 
   const openSubmitModal = (assignment: any) => {
     setCurrentAssignment(assignment);
-    setFileUrl('');
-    setFileName('');
-    setFileSize('');
+    setFileUrl(assignment.submission?.fileUrl || '');
+    setFileName(assignment.submission?.fileName || '');
+    setFileSize(assignment.submission?.fileSize || '');
+    setSubmissionLink(assignment.submission?.submissionLink || '');
+    setSubmitMode(assignment.submission?.submissionLink ? 'LINK' : 'FILE');
     setStudentComment(assignment.submission?.studentComment || '');
     setSubmitError('');
     setSubmitModalOpen(true);
@@ -124,9 +128,22 @@ export default function StudentDashboardPage() {
 
   const handleSubmitHomework = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fileUrl || !currentAssignment || !user) {
+    if (!currentAssignment || !user) return;
+    
+    if (submitMode === 'FILE' && !fileUrl) {
       setSubmitError('გთხოვთ ატვირთოთ ფაილი');
       return;
+    }
+    if (submitMode === 'LINK') {
+      if (!submissionLink.trim()) {
+        setSubmitError('გთხოვთ მიუთითოთ ბმული');
+        return;
+      }
+      const isGoogleLink = submissionLink.includes('drive.google.com') || submissionLink.includes('docs.google.com');
+      if (!isGoogleLink) {
+        setSubmitError('გთხოვთ მიუთითოთ მხოლოდ Google Drive-ის ან Google Docs-ის ბმული');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -135,9 +152,10 @@ export default function StudentDashboardPage() {
         assignmentId: currentAssignment.id,
         studentId: user.id,
         studentName: user.name,
-        fileUrl,
-        fileName,
-        fileSize,
+        fileUrl: submitMode === 'FILE' ? fileUrl : '',
+        fileName: submitMode === 'FILE' ? fileName : '',
+        fileSize: submitMode === 'FILE' ? fileSize : '',
+        submissionLink: submitMode === 'LINK' ? submissionLink : '',
         studentComment,
       });
 
@@ -151,17 +169,32 @@ export default function StudentDashboardPage() {
     }
   };
 
+  const handleCancelSubmission = async (assignment: any) => {
+    if (!assignment.submission) return;
+    if (!window.confirm('დარწმუნებული ხართ, რომ გსურთ ატვირთული დავალების წაშლა?')) return;
+    try {
+      await cancelSubmission(assignment.submission.id);
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'ფაილის წაშლა ვერ მოხერხდა');
+    }
+  };
+
   // Filter assignments
   const filteredAssignments = useMemo(() => {
     return assignments.filter((a) => {
       if (selectedSubjectFilter !== 'ALL' && a.subjectId !== selectedSubjectFilter) {
         return false;
       }
+      const isPastDue = new Date(a.dueDate).getTime() < Date.now();
+      const status = a.submission ? a.submission.status : (isPastDue ? 'OVERDUE' : 'TODO');
+
       if (filter === 'ALL') return true;
-      if (filter === 'TODO') return !a.submission || a.submission.status === 'DECLINED';
-      if (filter === 'SUBMITTED') return a.submission && a.submission.status === 'SUBMITTED';
-      if (filter === 'APPROVED') return a.submission && a.submission.status === 'APPROVED';
-      if (filter === 'DECLINED') return a.submission && a.submission.status === 'DECLINED';
+      if (filter === 'TODO') return status === 'TODO' || status === 'DECLINED';
+      if (filter === 'SUBMITTED') return status === 'SUBMITTED';
+      if (filter === 'APPROVED') return status === 'APPROVED';
+      if (filter === 'DECLINED') return status === 'DECLINED' || status === 'OVERDUE';
       return true;
     });
   }, [assignments, filter, selectedSubjectFilter]);
@@ -174,10 +207,18 @@ export default function StudentDashboardPage() {
     todoCount,
   } = useMemo(() => {
     const total = assignments.length;
-    const approved = assignments.filter((a) => a.submission?.status === 'APPROVED').length;
-    const pending = assignments.filter((a) => a.submission?.status === 'SUBMITTED').length;
-    const declined = assignments.filter((a) => a.submission?.status === 'DECLINED').length;
-    const todo = assignments.filter((a) => !a.submission).length + declined;
+    let approved = 0, pending = 0, declined = 0, todo = 0;
+
+    for (const a of assignments) {
+      const isPastDue = new Date(a.dueDate).getTime() < Date.now();
+      const status = a.submission ? a.submission.status : (isPastDue ? 'OVERDUE' : 'TODO');
+      
+      if (status === 'APPROVED') approved++;
+      else if (status === 'SUBMITTED') pending++;
+      else if (status === 'DECLINED' || status === 'OVERDUE') declined++;
+      
+      if (status === 'TODO' || status === 'DECLINED') todo++;
+    }
 
     return {
       totalAssignmentsCount: total,
@@ -371,14 +412,15 @@ export default function StudentDashboardPage() {
               });
 
               const isPastDue = new Date(assignment.dueDate).getTime() < Date.now();
+              const status = submission ? submission.status : (isPastDue ? 'OVERDUE' : 'TODO');
 
               return (
                 <div
                   key={assignment.id}
                   className={`bg-white rounded-3xl p-5 sm:p-6 border transition-all ${
-                    submission?.status === 'DECLINED'
+                    (status === 'DECLINED' || status === 'OVERDUE')
                       ? 'border-rose-300 shadow-md ring-2 ring-rose-100'
-                      : submission?.status === 'APPROVED'
+                      : status === 'APPROVED'
                       ? 'border-emerald-200/80 shadow-sm'
                       : 'border-slate-200/90 shadow-sm hover:shadow-md'
                   }`}
@@ -393,7 +435,7 @@ export default function StudentDashboardPage() {
                       </span>
                       <span
                         className={`flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                          isPastDue
+                          isPastDue && status !== 'APPROVED' && status !== 'SUBMITTED'
                             ? 'bg-rose-50 text-rose-700 border border-rose-200'
                             : 'bg-slate-100 text-slate-700'
                         }`}
@@ -405,25 +447,31 @@ export default function StudentDashboardPage() {
 
                     {/* Status Badge */}
                     <div>
-                      {submission?.status === 'APPROVED' && (
+                      {status === 'APPROVED' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           დადასტურებულია ✅
                         </span>
                       )}
-                      {submission?.status === 'DECLINED' && (
+                      {status === 'DECLINED' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 animate-pulse">
                           <XCircle className="w-4 h-4 text-rose-600" />
                           უარყოფილია ❌
                         </span>
                       )}
-                      {submission?.status === 'SUBMITTED' && (
+                      {status === 'OVERDUE' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          <AlertCircle className="w-4 h-4 text-rose-600" />
+                          ვადაგასულია
+                        </span>
+                      )}
+                      {status === 'SUBMITTED' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
                           <Clock className="w-4 h-4 text-amber-600" />
                           განსახილველია ⏳
                         </span>
                       )}
-                      {!submission && (
+                      {status === 'TODO' && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                           <Clock className="w-4 h-4 text-slate-500" />
                           ჩასაბარებელია
@@ -457,7 +505,7 @@ export default function StudentDashboardPage() {
                     )}
 
                     {/* Declined Warning Box */}
-                    {submission?.status === 'DECLINED' && (
+                    {status === 'DECLINED' && submission?.teacherFeedback && (
                       <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-sm space-y-1">
                         <div className="flex items-center gap-1.5 font-bold text-rose-800">
                           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -471,21 +519,38 @@ export default function StudentDashboardPage() {
                         </p>
                       </div>
                     )}
+                    
+                    {/* Overdue message */}
+                    {status === 'OVERDUE' && (
+                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>დავალების ჩაბარების ვადა ამოიწურა, ჩაბარება შეუძლებელია.</span>
+                      </div>
+                    )}
 
                     {/* Approved Feedback Box */}
-                    {submission?.status === 'APPROVED' && submission.teacherFeedback && (
+                    {status === 'APPROVED' && submission?.teacherFeedback && (
                       <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span className="break-words">{submission.teacherFeedback}</span>
                       </div>
                     )}
 
-                    {/* Previously submitted file info */}
+                    {/* Previously submitted file/link info */}
                     {submission && (
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium pt-1">
                         <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                        <span className="break-all">ატვირთული ფაილი: <strong>{submission.fileName}</strong> ({submission.fileSize})</span>
-                        <span>• ჩაბარდა: {new Date(submission.submittedAt).toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
+                        <span className="break-all">
+                          ჩაბარებული ნამუშევარი: 
+                          {submission.submissionLink ? (
+                            <a href={submission.submissionLink} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold ml-1 flex inline-flex items-center gap-1">
+                              ბმულის გახსნა <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <strong className="ml-1">{submission.fileName} ({submission.fileSize})</strong>
+                          )}
+                        </span>
+                        <span>• დრო: {new Date(submission.submittedAt).toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
                       </div>
                     )}
                   </div>
@@ -493,17 +558,19 @@ export default function StudentDashboardPage() {
                   {/* Submission Action Footer */}
                   <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="text-xs text-slate-400">
-                      {submission?.status === 'APPROVED'
+                      {status === 'APPROVED'
                         ? 'დავალება წარმატებით ჩაბარებულია'
-                        : submission?.status === 'SUBMITTED'
+                        : status === 'SUBMITTED'
                         ? 'მასწავლებელი ამოწმებს თქვენს ნამუშევარს'
-                        : submission?.status === 'DECLINED'
+                        : status === 'DECLINED'
                         ? 'საჭიროა ხელახალი ჩაბარება'
+                        : status === 'OVERDUE'
+                        ? 'დავალების ვადა ამოიწურა'
                         : 'გადაუღეთ ფოტო რვეულს ან ატვირთეთ ფაილი'}
                     </div>
 
                     <div>
-                      {!submission && (
+                      {!isPastDue && status === 'TODO' && (
                         <button
                           onClick={() => openSubmitModal(assignment)}
                           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-200 transition-all active:scale-95"
@@ -513,24 +580,42 @@ export default function StudentDashboardPage() {
                         </button>
                       )}
 
-                      {submission?.status === 'DECLINED' && (
-                        <button
-                          onClick={() => openSubmitModal(assignment)}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md shadow-rose-200 transition-all active:scale-95"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                          ხელახლა ჩაბარება
-                        </button>
+                      {!isPastDue && status === 'DECLINED' && (
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            onClick={() => openSubmitModal(assignment)}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md shadow-rose-200 transition-all active:scale-95"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            ხელახლა ჩაბარება
+                          </button>
+                          <button
+                            onClick={() => handleCancelSubmission(assignment)}
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                            წაშლა
+                          </button>
+                        </div>
                       )}
 
-                      {submission?.status === 'SUBMITTED' && (
-                        <button
-                          onClick={() => openSubmitModal(assignment)}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          ფაილის შეცვლა
-                        </button>
+                      {!isPastDue && status === 'SUBMITTED' && (
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            onClick={() => openSubmitModal(assignment)}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            ფაილის შეცვლა
+                          </button>
+                          <button
+                            onClick={() => handleCancelSubmission(assignment)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            წაშლა
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -580,52 +665,89 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {/* Upload Box */}
+                {/* Upload or Link Toggle */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    ატვირთეთ ნამუშევარი (ფოტო / PDF / Word) *
-                  </label>
+                  <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setSubmitMode('FILE')}
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitMode === 'FILE' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      ფაილის ატვირთვა
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubmitMode('LINK')}
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitMode === 'LINK' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      ბმულის მითითება
+                    </button>
+                  </div>
 
-                  {fileUrl ? (
-                    <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 min-w-0">
-                      <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
-                        <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
-                        <div className="truncate min-w-0 flex-1">
-                          <p className="text-xs font-bold text-indigo-900 truncate">{fileName}</p>
-                          <p className="text-[11px] text-indigo-600">{fileSize}</p>
+                  {submitMode === 'FILE' ? (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                        ატვირთეთ ნამუშევარი *
+                      </label>
+                      {currentAssignment.allowedFormats && currentAssignment.allowedFormats.length > 0 && (
+                        <p className="text-xs text-indigo-600 mb-3 font-medium">დაშვებული ფორმატები: {currentAssignment.allowedFormats.map(f => f.replace(/\./g, '').toUpperCase()).join(', ')}</p>
+                      )}
+
+                      {fileUrl ? (
+                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
+                            <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+                            <div className="truncate min-w-0 flex-1">
+                              <p className="text-xs font-bold text-indigo-900 truncate">{fileName}</p>
+                              <p className="text-[11px] text-indigo-600">{fileSize}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFileUrl('');
+                              setFileName('');
+                              setFileSize('');
+                            }}
+                            className="text-xs font-bold text-rose-600 hover:underline shrink-0 ml-2"
+                          >
+                            ფაილის შეცვლა
+                          </button>
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFileUrl('');
-                          setFileName('');
-                          setFileSize('');
-                        }}
-                        className="text-xs font-bold text-rose-600 hover:underline shrink-0 ml-2"
-                      >
-                        ფაილის შეცვლა
-                      </button>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center p-6 sm:p-8 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl cursor-pointer bg-indigo-50/40 hover:bg-indigo-50/80 transition-all">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mb-3 shadow-sm">
+                            <Upload className="w-6 h-6" />
+                          </div>
+                          <span className="text-sm font-bold text-indigo-950 text-center">
+                            {uploading ? 'მიმდინარეობს ატვირთვა...' : 'დააჭირეთ ან ჩააგდეთ ფაილი აქ'}
+                          </span>
+                          <span className="text-xs text-slate-500 mt-1 text-center">
+                            მობილურიდან შეგიძლიათ გადაიღოთ რვეულის ფოტო
+                          </span>
+                          <input
+                            type="file"
+                            accept={currentAssignment.allowedFormats && currentAssignment.allowedFormats.length > 0 ? currentAssignment.allowedFormats.join(',') : ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.pptx,.txt"}
+                            disabled={uploading}
+                            onChange={handleFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center p-6 sm:p-8 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl cursor-pointer bg-indigo-50/40 hover:bg-indigo-50/80 transition-all">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mb-3 shadow-sm">
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      <span className="text-sm font-bold text-indigo-950 text-center">
-                        {uploading ? 'მიმდინარეობს ატვირთვა...' : 'დააჭირეთ ან ჩააგდეთ ფაილი აქ'}
-                      </span>
-                      <span className="text-xs text-slate-500 mt-1 text-center">
-                        მობილურიდან შეგიძლიათ გადაიღოთ რვეულის ფოტო (JPG, PNG, PDF)
-                      </span>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                        ჩასვით ბმული (Google Drive, Docs და ა.შ.) *
+                      </label>
                       <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.pptx,.txt"
-                        disabled={uploading}
-                        onChange={handleFileUpload}
-                        className="hidden"
+                        type="url"
+                        value={submissionLink}
+                        onChange={(e) => setSubmissionLink(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-4 py-3 bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                       />
-                    </label>
+                    </div>
                   )}
                 </div>
 
@@ -655,7 +777,7 @@ export default function StudentDashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || uploading || !fileUrl}
+                  disabled={submitting || uploading || (submitMode === 'FILE' && !fileUrl) || (submitMode === 'LINK' && !submissionLink.trim())}
                   className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-md shadow-indigo-200 disabled:opacity-50 flex items-center gap-2 transition-all active:scale-[0.98]"
                 >
                   <Send className="w-4 h-4" />

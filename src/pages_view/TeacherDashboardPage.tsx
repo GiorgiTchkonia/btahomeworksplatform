@@ -34,10 +34,10 @@ export default function TeacherDashboardPage() {
   const [newDueDate, setNewDueDate] = useState('');
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('');
   const [newAttachmentName, setNewAttachmentName] = useState('');
+  const [allowedFormats, setAllowedFormats] = useState<string[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
-
 
   const loadData = async () => {
     try {
@@ -106,6 +106,7 @@ export default function TeacherDashboardPage() {
         dueDate: newDueDate,
         attachmentUrl: newAttachmentUrl,
         attachmentName: newAttachmentName,
+        allowedFormats,
       });
 
       setIsModalOpen(false);
@@ -114,6 +115,7 @@ export default function TeacherDashboardPage() {
       setNewDueDate('');
       setNewAttachmentUrl('');
       setNewAttachmentName('');
+      setAllowedFormats([]);
       loadData();
     } catch (err: any) {
       console.error(err);
@@ -411,6 +413,39 @@ export default function TeacherDashboardPage() {
                     value={newDueDate}
                     onChange={(val) => setNewDueDate(val)}
                   />
+                </div>
+
+                {/* Allowed Formats */}
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    დაშვებული ფაილის ფორმატები
+                  </label>
+                  <p className="text-xs text-slate-500 mb-3">მონიშნეთ, თუ გსურთ მხოლოდ კონკრეტული ტიპის ფაილების ატვირთვის უფლება მისცეთ მოსწავლეებს (თუ არცერთს მონიშნავთ, ნებისმიერი ფორმატი იქნება დაშვებული).</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: '.pdf', label: 'PDF' },
+                      { id: '.doc,.docx', label: 'Word' },
+                      { id: '.ppt,.pptx', label: 'PowerPoint' },
+                      { id: '.xls,.xlsx', label: 'Excel' },
+                      { id: '.jpg,.jpeg,.png,.webp', label: 'სურათები' }
+                    ].map(format => (
+                      <label key={format.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                          checked={allowedFormats.includes(format.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setAllowedFormats([...allowedFormats, format.id]);
+                            } else {
+                              setAllowedFormats(allowedFormats.filter(f => f !== format.id));
+                            }
+                          }}
+                        />
+                        <span className="text-sm font-semibold text-slate-700">{format.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Optional Attachment */}

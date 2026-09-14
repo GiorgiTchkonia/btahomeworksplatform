@@ -26,7 +26,13 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       });
 
       if (authError || !data.user) {
-        setError(authError?.message || 'არასწორი ელ. ფოსტა ან პაროლი');
+        let msg = authError?.message || 'არასწორი ელ. ფოსტა ან პაროლი';
+        if (msg.includes('Invalid login credentials')) {
+          msg = 'არასწორი ელ. ფოსტა ან პაროლი';
+        } else if (msg.includes('Email not confirmed')) {
+          msg = 'ელ. ფოსტა არ არის დადასტურებული';
+        }
+        setError(msg);
         setLoading(false);
         return;
       }

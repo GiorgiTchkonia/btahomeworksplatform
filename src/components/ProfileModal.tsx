@@ -161,7 +161,19 @@ export default function ProfileModal({
       }, 3000);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'სერვერთან კავშირი შეწყდა');
+      let msg = err.message || 'სერვერთან კავშირი შეწყდა';
+      if (msg.includes('New password should be different')) {
+        msg = 'ახალი პაროლი უნდა განსხვავდებოდეს ძველისგან';
+      } else if (msg.includes('should be at least 6 characters')) {
+        msg = 'პაროლი უნდა შეიცავდეს მინიმუმ 6 სიმბოლოს';
+      } else if (msg.includes('rate limit')) {
+        msg = 'ძალიან ბევრი მოთხოვნა. გთხოვთ სცადოთ მოგვიანებით.';
+      } else if (msg.includes('Invalid login credentials')) {
+        msg = 'არასწორი ელ. ფოსტა ან პაროლი';
+      } else if (msg.includes('violates unique constraint')) {
+        msg = 'ეს ელ. ფოსტა უკვე გამოყენებულია';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
