@@ -185,11 +185,14 @@ export default function ProfileModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl max-w-lg w-full max-h-[calc(100vh-2.5rem)] sm:max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-150 my-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-modal-title"
+        className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full max-h-[calc(100vh-2.5rem)] sm:max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-150 my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Fixed Header */}
-        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 shrink-0 bg-white">
+        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3.5 min-w-0">
               <div
@@ -205,16 +208,16 @@ export default function ProfileModal({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate">
+                  <h2 id="profile-modal-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
                     {currentUser.name}
                   </h2>
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${
                       isAdmin
-                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                        ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 border border-amber-200'
                         : isTeacher
-                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200'
+                        : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200'
                     }`}
                   >
                     {isAdmin ? (
@@ -235,21 +238,22 @@ export default function ProfileModal({
                     )}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 truncate mt-0.5">{currentUser.email}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{currentUser.email}</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0 ml-2"
+              aria-label="დახურვა"
+              className="p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0 ml-2"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Fixed Tabs */}
-          <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl mt-4">
+          <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-700 rounded-xl mt-4">
             <button
               type="button"
               onClick={() => {
@@ -259,8 +263,8 @@ export default function ProfileModal({
               }}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${
                 activeTab === 'INFO'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               <UserIcon className="w-3.5 h-3.5" />
@@ -275,8 +279,8 @@ export default function ProfileModal({
               }}
               className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition-all ${
                 activeTab === 'PASSWORD'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               <KeyRound className="w-3.5 h-3.5" />
@@ -290,14 +294,14 @@ export default function ProfileModal({
           <div className="p-5 sm:p-6 py-4 overflow-y-auto flex-1 space-y-4">
             {/* Alerts */}
             {error && (
-              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-rose-700 dark:text-rose-400 text-xs font-semibold">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
                 <span>{error}</span>
               </div>
             )}
 
             {successMsg && (
-              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
                 <span>{successMsg}</span>
               </div>
@@ -307,41 +311,43 @@ export default function ProfileModal({
               <>
                 {/* Name */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                  <label htmlFor="profile-name" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                     სახელი და გვარი
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                       <UserIcon className="w-4 h-4" />
                     </div>
                     <input
+                      id="profile-name"
                       type="text"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                  <label htmlFor="profile-email" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                     ელექტრონული ფოსტა
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                       <Mail className="w-4 h-4" />
                     </div>
                     <input
+                      id="profile-email"
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                     />
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
                     გამოიყენება სისტემაში ავტორიზაციისთვის
                   </p>
                 </div>
@@ -350,37 +356,39 @@ export default function ProfileModal({
                 {isTeacher && (
                   <>
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                      <label htmlFor="profile-subject" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                         საგანი
                       </label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                           <BookOpen className="w-4 h-4" />
                         </div>
                         <input
+                          id="profile-subject"
                           type="text"
                           required
                           value={subject}
                           onChange={(e) => setSubject(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                      <label htmlFor="profile-phone" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                         ტელეფონის ნომერი
                       </label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                           <Phone className="w-4 h-4" />
                         </div>
                         <input
+                          id="profile-phone"
                           type="text"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           placeholder="+995 599 00 11 22"
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                         />
                       </div>
                     </div>
@@ -390,13 +398,14 @@ export default function ProfileModal({
                 {/* Student Fields */}
                 {isStudent && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                    <label htmlFor="profile-grade" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                       კლასი
                     </label>
                     <select
+                      id="profile-grade"
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                     >
                       <option value="VII კლასი">VII კლასი</option>
                       <option value="VIII კლასი">VIII კლასი</option>
@@ -412,60 +421,63 @@ export default function ProfileModal({
               /* Password Tab */
               <>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                  <label htmlFor="profile-current-password" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                     მიმდინარე პაროლი *
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                       <Lock className="w-4 h-4" />
                     </div>
                     <input
+                      id="profile-current-password"
                       type="password"
                       required
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="შეიყვანეთ ძველი პაროლი"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                  <label htmlFor="profile-new-password" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                     ახალი პაროლი * (მინიმუმ 6 სიმბოლო)
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                       <KeyRound className="w-4 h-4" />
                     </div>
                     <input
+                      id="profile-new-password"
                       type="password"
                       required
                       minLength={6}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="შეიყვანეთ ახალი პაროლი"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                  <label htmlFor="profile-confirm-password" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
                     გაიმეორეთ ახალი პაროლი *
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                       <KeyRound className="w-4 h-4" />
                     </div>
                     <input
+                      id="profile-confirm-password"
                       type="password"
                       required
                       minLength={6}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="გაიმეორეთ ახალი პაროლი"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -474,11 +486,11 @@ export default function ProfileModal({
           </div>
 
           {/* Fixed Footer */}
-          <div className="p-4 sm:p-5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+          <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-900/80 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-3 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+              className="px-4 py-2.5 rounded-xl font-bold text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
               დახურვა
             </button>

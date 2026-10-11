@@ -38,6 +38,19 @@ next-env.d.ts
 /public/uploads/*
 !/public/uploads/.gitkeep
 
-
 dist
+
+# Supabase sensitive data migrations
+supabase/data-migration.sql
+supabase_migration.sql
+*.sql.bak
+*.sql.dump
+
+# Agent / scratch artifacts
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+screenshot.png
 

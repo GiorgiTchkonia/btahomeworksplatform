@@ -1,21 +1,37 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('Missing Supabase Service Role Key. User management (add/delete) will not work.');
-}
+/**
+ * SECURITY NOTICE:
+ * In production environments, client-side service role keys MUST NOT be used.
+ * Privileged user operations (create, update, delete) are routed through the
+ * Supabase Edge Function `admin-users`, which validates caller ADMIN role.
+ *
+ * This client is preserved strictly as a backward-compatible fallback for offline
+ * or local development environments prior to Edge Function deployment.
+ */
+export const isLocalAdminConfigured = (): boolean => {
+  return Boolean(supabaseUrl && supabaseServiceKey && supabaseServiceKey.length > 20);
+};
 
-// NOTE: Using service role key in a frontend app is not secure for production. 
-// It is recommended to use Edge Functions. But for this specific requirement, we do it here.
-export const supabaseAdmin = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseServiceKey || 'dummy-key-to-prevent-crash', 
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
+const globalForSupabaseAdmin = globalThis as unknown as {
+  __btaSupabaseAdminClient?: SupabaseClient;
+};
+
+export const supabaseAdmin: SupabaseClient =
+  globalForSupabaseAdmin.__btaSupabaseAdminClient ??
+  (globalForSupabaseAdmin.__btaSupabaseAdminClient = createClient(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseServiceKey || 'dummy-key-for-local-fallback',
+    {
+      auth: {
+        storageKey: 'bta-supabase-admin-fallback-token',
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
     }
-  }
-);
+  ));
+

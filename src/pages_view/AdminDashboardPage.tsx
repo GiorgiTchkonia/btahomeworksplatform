@@ -14,19 +14,24 @@ import {
   Edit2,
   Trash2,
   X,
-  Key
+  Key,
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
-import { SafeTeacherUser, SafeStudentUser, SafeAdminUser, SafeUser } from '@/types';
+import { SafeTeacherUser, SafeStudentUser, SafeAdminUser, SafeUser, Role } from '@/types';
 import { getAllUsersForAdmin, addWhitelistUser, adminUpdateUser, deleteWhitelistUser } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { useDialog } from '@/components/ui/DialogProvider';
 
 export default function AdminDashboardPage() {
+  const { showAlert, showConfirm } = useDialog();
   const [, navigate] = useLocation();
   const [currentUser, setCurrentUser] = useState<SafeAdminUser | null>(null);
   const [teachers, setTeachers] = useState<SafeTeacherUser[]>([]);
   const [students, setStudents] = useState<SafeStudentUser[]>([]);
   const [admins, setAdmins] = useState<SafeAdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +43,15 @@ export default function AdminDashboardPage() {
   const [editingUser, setEditingUser] = useState<SafeUser | null>(null);
   
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+    subject: string;
+    grade: string;
+    phone: string;
+  }>({
     name: '',
     email: '',
     password: '',
@@ -53,6 +66,7 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -72,9 +86,9 @@ export default function AdminDashboardPage() {
       setStudents(data.students as SafeStudentUser[]);
       setAdmins(data.admins as SafeAdminUser[]);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      navigate('/login');
+      setLoadError('მონაცემების ჩატვირთვა ვერ მოხერხდა. გთხოვთ სცადოთ თავიდან.');
     } finally {
       setLoading(false);
     }
@@ -159,23 +173,47 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDelete = async (userId: string) => {
-    if (!window.confirm("ნამდვილად გსურთ მომხმარებლის წაშლა?")) return;
-    try {
-      setLoading(true);
-      await deleteWhitelistUser(userId);
-      await loadData();
-    } catch (err: any) {
-      alert("წაშლისას დაფიქსირდა შეცდომა: " + (err.message || "უცნობი შეცდომა"));
-      setLoading(false);
-    }
+  const handleDelete = (userId: string) => {
+    showConfirm(
+      'მომხმარებლის წაშლა',
+      'ნამდვილად გსურთ მომხმარებლის წაშლა?',
+      async () => {
+        try {
+          setLoading(true);
+          await deleteWhitelistUser(userId);
+          await loadData();
+        } catch (err: any) {
+          showAlert("წაშლისას დაფიქსირდა შეცდომა: " + (err.message || "უცნობი შეცდომა"), 'error');
+          setLoading(false);
+        }
+      }
+    );
   };
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
         <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-medium text-sm">იტვირთება მონაცემები...</p>
+        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">იტვირთება მონაცემები...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-3xl text-center space-y-4 shadow-sm">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">დაფიქსირდა შეცდომა</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">{loadError}</p>
+        <button
+          onClick={loadData}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>ხელახლა ცდა</span>
+        </button>
       </div>
     );
   }
@@ -183,89 +221,86 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8 pb-12">
       {/* Header Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-slate-900/10 border border-slate-800">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold tracking-wide uppercase">
-              <Shield className="w-4 h-4 text-indigo-400" />
-              <span>უსაფრთხო ადმინ პანელი</span>
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-              მომხმარებელთა მართვა (Whitelist)
-            </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-xl">
-              მართეთ ადმინისტრატორები (Administrator), მასწავლებლები და მოსწავლეები პირდაპირ საიტიდან.
-            </p>
-          </div>
+      <div className="bg-white dark:bg-slate-800 rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+        {/* Subtle decorative background */}
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full border-[20px] border-indigo-50/50 pointer-events-none"></div>
+        <div className="absolute bottom-0 right-32 -mb-12 w-40 h-40 rounded-full border-[10px] border-indigo-50/50 pointer-events-none"></div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleOpenModal('ADD')}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all text-sm shrink-0"
-            >
-              <Plus className="w-5 h-5" />
-              <span>მომხმარებლის დამატება</span>
-            </button>
+        <div className="space-y-3 relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+            <Shield className="w-3.5 h-3.5" />
+            <span>ადმინისტრატორის პანელი</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            სისტემის მართვა
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xl leading-relaxed">
+            მართეთ მომხმარებლები, საგნები და აკონტროლეთ პლატფორმის აქტივობა.
+          </p>
         </div>
 
-        {/* Subtle Decorative Background Glow */}
-        <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <button
+          onClick={() => handleOpenModal('ADD')}
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm hover:shadow-md hover:shadow-indigo-500/20 transition-all active:scale-[0.98] text-sm relative z-10"
+        >
+          <Plus className="w-5 h-5" />
+          <span>მომხმარებლის დამატება</span>
+        </button>
       </div>
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">სულ სიაში</div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">{allUsers.length}</div>
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">სულ სიაში</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5">{allUsers.length}</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
             <Shield className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">ადმინები</div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">{admins.length}</div>
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ადმინები</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5">{admins.length}</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
             <School className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">მასწავლებლები</div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">{teachers.length}</div>
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">მასწავლებლები</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5">{teachers.length}</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center shrink-0">
             <GraduationCap className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">მოსწავლეები</div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">{students.length}</div>
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">მოსწავლეები</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5">{students.length}</div>
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Role Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-full sm:w-auto overflow-x-auto">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-700 rounded-xl w-full sm:w-auto overflow-x-auto">
           <button
             onClick={() => setActiveTab('ALL')}
             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'ALL'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             ყველა ({allUsers.length})
@@ -274,8 +309,8 @@ export default function AdminDashboardPage() {
             onClick={() => setActiveTab('ADMIN')}
             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'ADMIN'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             ადმინები ({admins.length})
@@ -284,8 +319,8 @@ export default function AdminDashboardPage() {
             onClick={() => setActiveTab('TEACHER')}
             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'TEACHER'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             მასწავლებლები ({teachers.length})
@@ -294,8 +329,8 @@ export default function AdminDashboardPage() {
             onClick={() => setActiveTab('STUDENT')}
             className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'STUDENT'
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             მოსწავლეები ({students.length})
@@ -304,7 +339,7 @@ export default function AdminDashboardPage() {
 
         {/* Search Input */}
         <div className="relative flex-1 max-w-md shrink-0">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
             <Search className="w-4 h-4" />
           </div>
           <input
@@ -312,17 +347,17 @@ export default function AdminDashboardPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ძებნა სახელით, მეილით ან საგნით..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm transition-all outline-none"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm transition-all outline-none"
           />
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <tr className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700/80 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <th className="py-4 px-6">მომხმარებელი</th>
                 <th className="py-4 px-6">როლი</th>
                 <th className="py-4 px-6">დამატებითი ინფორმაცია</th>
@@ -332,10 +367,10 @@ export default function AdminDashboardPage() {
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-slate-500">
+                  <td colSpan={4} className="py-12 text-center text-slate-500 dark:text-slate-400">
                     <Users className="w-10 h-10 mx-auto text-slate-300 mb-2" />
                     <p className="font-semibold">მომხმარებელი ვერ მოიძებნა</p>
-                    <p className="text-xs text-slate-400 mt-1">სცადეთ შეცვალოთ საძიებო პარამეტრები</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">სცადეთ შეცვალოთ საძიებო პარამეტრები</p>
                   </td>
                 </tr>
               ) : (
@@ -348,24 +383,24 @@ export default function AdminDashboardPage() {
                   const student = isStudent ? (u as SafeStudentUser) : null;
 
                   return (
-                    <tr key={u.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors">
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3.5">
                           <div
                             className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
                               isAdmin
-                                ? 'bg-slate-200 text-slate-700'
+                                ? 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300'
                                 : isTeacher
-                                ? 'bg-indigo-100 text-indigo-700'
-                                : 'bg-emerald-100 text-emerald-700'
+                                ? 'bg-indigo-100 text-indigo-700 dark:text-indigo-300'
+                                : 'bg-emerald-100 text-emerald-700 dark:text-emerald-400'
                             }`}
                           >
                             {u.name ? u.name.charAt(0).toUpperCase() : '?'}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900">{u.name}</div>
-                            <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                              <Mail className="w-3.5 h-3.5 text-slate-400" />
+                            <div className="font-bold text-slate-900 dark:text-slate-100">{u.name}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                              <Mail className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                               <span>{u.email}</span>
                             </div>
                           </div>
@@ -374,19 +409,19 @@ export default function AdminDashboardPage() {
 
                       <td className="py-4 px-6">
                         {isAdmin && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">
                             <Shield className="w-3.5 h-3.5" />
-                            Administrator
+                            ადმინისტრატორი
                           </span>
                         )}
                         {isTeacher && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60">
                             <School className="w-3.5 h-3.5" />
                             მასწავლებელი
                           </span>
                         )}
                         {isStudent && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60">
                             <GraduationCap className="w-3.5 h-3.5" />
                             მოსწავლე
                           </span>
@@ -396,24 +431,24 @@ export default function AdminDashboardPage() {
                       <td className="py-4 px-6">
                         {isTeacher && teacher ? (
                           <div className="space-y-1">
-                            <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                               <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
                               <span>საგანი: {teacher.subject || '-'}</span>
                             </div>
                             {teacher.phone && (
-                              <div className="text-xs text-slate-500 flex items-center gap-1.5">
-                                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                              <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <Phone className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                                 <span>{teacher.phone}</span>
                               </div>
                             )}
                           </div>
                         ) : student ? (
-                          <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                             <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
                             <span>კლასი: {student.grade || '-'}</span>
                           </div>
                         ) : isAdmin ? (
-                          <div className="text-xs text-slate-500 italic">
+                          <div className="text-xs text-slate-500 dark:text-slate-400 italic">
                             სისტემის მმართველი
                           </div>
                         ) : null}
@@ -423,7 +458,7 @@ export default function AdminDashboardPage() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenModal('EDIT', u)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
                             title="რედაქტირება"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -431,7 +466,7 @@ export default function AdminDashboardPage() {
                           {currentUser?.id !== u.id && (
                             <button
                               onClick={() => handleDelete(u.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
                               title="წაშლა"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -449,15 +484,15 @@ export default function AdminDashboardPage() {
       </div>
       
       {/* Note about admin key */}
-      <div className="bg-slate-900 text-slate-300 rounded-2xl p-6 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl p-6 border border-amber-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center shrink-0">
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-white font-bold text-sm">ყურადღება მომხმარებლების მართვაზე</div>
-            <div className="text-xs text-slate-400 mt-0.5">
-              მომხმარებლების დასამატებლად / წასაშლელად საჭიროა <code>VITE_SUPABASE_SERVICE_ROLE_KEY</code> იყოს <code>.env</code> ფაილში.
+            <div className="text-slate-900 dark:text-slate-100 font-bold text-sm">ყურადღება მომხმარებლების მართვაზე</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              მომხმარებლების დასამატებლად / წასაშლელად საჭიროა <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-700 dark:text-slate-300">VITE_SUPABASE_SERVICE_ROLE_KEY</code> იყოს <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-700 dark:text-slate-300">.env</code> ფაილში.
             </div>
           </div>
         </div>
@@ -466,14 +501,21 @@ export default function AdminDashboardPage() {
       {/* Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-900">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-modal-title"
+            className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-700">
+              <h2 id="admin-modal-title" className="text-xl font-bold text-slate-900 dark:text-slate-100">
                 {modalMode === 'ADD' ? 'ახალი მომხმარებელი' : 'რედაქტირება'}
               </h2>
               <button 
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors"
+                aria-label="დახურვა"
+                className="p-2 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300 rounded-full transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -488,51 +530,55 @@ export default function AdminDashboardPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">სახელი და გვარი</label>
+                  <label htmlFor="admin-user-name" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">სახელი და გვარი</label>
                   <input
+                    id="admin-user-name"
                     required
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">ელ. ფოსტა</label>
+                  <label htmlFor="admin-user-email" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ელ. ფოსტა</label>
                   <input
+                    id="admin-user-email"
                     required
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="admin-user-password" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     {modalMode === 'ADD' ? 'პაროლი' : 'ახალი პაროლი (დატოვეთ ცარიელი თუ არ ცვლით)'}
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                       <Key className="w-4 h-4" />
                     </div>
                     <input
+                      id="admin-user-password"
                       type="password"
                       required={modalMode === 'ADD'}
                       value={formData.password}
                       onChange={(e) => setFormData({...formData, password: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">როლი</label>
+                  <label htmlFor="admin-user-role" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">როლი</label>
                   <select
+                    id="admin-user-role"
                     value={formData.role}
-                    onChange={(e) => setFormData({...formData, role: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all font-semibold text-slate-700"
+                    onChange={(e) => setFormData({...formData, role: e.target.value as Role})}
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all font-semibold text-slate-700 dark:text-slate-300"
                   >
                     <option value="STUDENT">მოსწავლე (Student)</option>
                     <option value="TEACHER">მასწავლებელი (Teacher)</option>
@@ -541,23 +587,25 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {formData.role === 'TEACHER' && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">საგანი</label>
+                      <label htmlFor="admin-user-subject" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">საგანი</label>
                       <input
+                        id="admin-user-subject"
                         type="text"
                         value={formData.subject}
                         onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all"
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">ტელეფონი</label>
+                      <label htmlFor="admin-user-phone" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ტელეფონი</label>
                       <input
+                        id="admin-user-phone"
                         type="text"
                         value={formData.phone}
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all"
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                       />
                     </div>
                   </div>
@@ -565,12 +613,13 @@ export default function AdminDashboardPage() {
 
                 {formData.role === 'STUDENT' && (
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">კლასი</label>
+                    <label htmlFor="admin-user-grade" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">კლასი</label>
                     <input
+                      id="admin-user-grade"
                       type="text"
                       value={formData.grade}
                       onChange={(e) => setFormData({...formData, grade: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 )}
@@ -580,7 +629,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="px-5 py-2.5 rounded-xl font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                 >
                   გაუქმება
                 </button>

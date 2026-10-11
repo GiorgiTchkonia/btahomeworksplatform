@@ -1,4 +1,5 @@
 export type Role = 'TEACHER' | 'STUDENT' | 'ADMIN';
+export type UserRole = Role;
 
 export interface TeacherUser {
   id: string;
@@ -74,6 +75,7 @@ export interface Submission {
   studentComment?: string;
   status: SubmissionStatus;
   teacherFeedback?: string;
+  grade?: number | null;
   submittedAt: string;
   reviewedAt?: string | null;
 }
@@ -99,3 +101,44 @@ export interface StudentAssignmentWithStatus extends Assignment {
   teacherName: string;
   submission: Submission | null;
 }
+
+export interface CreateAssignmentParams {
+  subjectId: string;
+  teacherId: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  allowedFormats?: string[];
+}
+
+export interface AddWhitelistUserData {
+  email: string;
+  password?: string;
+  name: string;
+  role: Role;
+  grade?: string | null;
+  subject?: string | null;
+  phone?: string | null;
+}
+
+export interface AdminUpdateUserData {
+  name?: string;
+  role?: Role;
+  email?: string;
+  password?: string;
+  subject?: string | null;
+  phone?: string | null;
+  grade?: string | null;
+}
+
+export interface UpdateProfileUpdates {
+  name?: string;
+  subject?: string | null;
+  phone?: string | null;
+  grade?: string | null;
+  email?: string;
+  newPassword?: string;
+}
+

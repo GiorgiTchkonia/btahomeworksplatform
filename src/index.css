@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --bta-blue: #2B4EFF;
+    --bta-blue-dark: #1a35d9;
+    --bta-ink: #111827;
+    --bta-muted: #6B7280;
+    --bta-surface: #F9FAFB;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: 'Noto Sans Georgian', 'DM Sans', system-ui, sans-serif;
+    line-height: 1.6;
+    background-color: #F9FAFB;
+    color: #111827;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.dark body {
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
+
+  ::selection {
+    background: #BFCEFF;
+    color: #0f1f6b;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+  html.dark ::-webkit-scrollbar-thumb { background: #334155; }
+  html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+}
+
+/* ─── Directional Scroll Reveal (Hardware-Accelerated & Smooth) ─── */
+.rv, .rv-l, .rv-r {
+  opacity: 0;
+  transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.rv {
+  transform: translate3d(0, 36px, 0);
+}
+
+.rv-l {
+  transform: translate3d(-40px, 0, 0);
+}
+
+.rv-r {
+  transform: translate3d(40px, 0, 0);
+}
+
+.rv.is-visible,
+.rv-l.is-visible,
+.rv-r.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Stagger Delays - Scoped specifically to scroll reveal elements so they never affect children */
+.rv.delay-100, .rv-l.delay-100, .rv-r.delay-100 { transition-delay: 0.08s; }
+.rv.delay-150, .rv-l.delay-150, .rv-r.delay-150 { transition-delay: 0.12s; }
+.rv.delay-200, .rv-l.delay-200, .rv-r.delay-200 { transition-delay: 0.16s; }
+.rv.delay-250, .rv-l.delay-250, .rv-r.delay-250 { transition-delay: 0.20s; }
+.rv.delay-300, .rv-l.delay-300, .rv-r.delay-300 { transition-delay: 0.24s; }
+.rv.delay-350, .rv-l.delay-350, .rv-r.delay-350 { transition-delay: 0.28s; }
+.rv.delay-400, .rv-l.delay-400, .rv-r.delay-400 { transition-delay: 0.32s; }
+.rv.delay-500, .rv-l.delay-500, .rv-r.delay-500 { transition-delay: 0.38s; }
+
+/* ─── Ultra-Smooth, Instant-Response Card Hover (Zero Jank, Zero Flicker) ─── */
+.card-box,
+.feature-role-card {
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              background-color 0.2s ease;
+  transition-delay: 0s !important;
+  will-change: transform;
+}
+
+.group:hover .card-box,
+.card-box:hover,
+.group:hover .feature-role-card,
+.feature-role-card:hover {
+  transform: translate3d(0, -6px, 0);
+  border-color: rgba(43, 78, 255, 0.45);
+  box-shadow: 0 12px 28px -4px rgba(43, 78, 255, 0.12), 0 0 0 1px rgba(43, 78, 255, 0.2);
+}
+
+html.dark .group:hover .card-box,
+html.dark .card-box:hover,
+html.dark .group:hover .feature-role-card,
+html.dark .feature-role-card:hover {
+  transform: translate3d(0, -6px, 0);
+  border-color: rgba(99, 132, 255, 0.7);
+  background-color: #1e293b;
+  box-shadow: 0 14px 32px -4px rgba(43, 78, 255, 0.35), 0 0 0 1px rgba(99, 132, 255, 0.45);
+}

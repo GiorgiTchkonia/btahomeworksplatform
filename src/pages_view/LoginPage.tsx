@@ -1,22 +1,38 @@
 import React, { useState } from 'react';
-import { useLocation } from 'wouter';
-import { GraduationCap, School, KeyRound, Mail, AlertCircle, ArrowRight, Shield } from 'lucide-react';
+import { useLocation, Link } from 'wouter';
+import { Eye, EyeOff, ArrowRight, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import BtaLogo from '@/components/BtaLogo';
+import { useDialog } from '@/components/ui/DialogProvider';
 
 interface LoginPageProps {
   onLoginSuccess?: () => void;
 }
 
+function validateEmail(emailStr: string): boolean {
+  if (!emailStr || typeof emailStr !== 'string') return false;
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(emailStr.trim());
+}
+
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [, navigate] = useLocation();
+  const { showAlert } = useDialog();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Forgot password modal state
+  const [forgotModalOpen, setForgotModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetError, setResetError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!email.trim() || !password) return;
     setLoading(true);
 
     try {
@@ -26,112 +42,310 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       });
 
       if (authError || !data.user) {
-        let msg = authError?.message || 'არასწორი ელ. ფოსტა ან პაროლი';
+        let msg = authError?.message || 'ელ.ფოსტა ან პაროლი არასწორია';
         if (msg.includes('Invalid login credentials')) {
-          msg = 'არასწორი ელ. ფოსტა ან პაროლი';
-        } else if (msg.includes('Email not confirmed')) {
-          msg = 'ელ. ფოსტა არ არის დადასტურებული';
+          msg = 'ელ.ფოსტა ან პაროლი არასწორია. სცადეთ ხელახლა.';
         }
-        setError(msg);
+        showAlert(msg, 'error');
         setLoading(false);
         return;
       }
 
       setLoading(false);
-      // We no longer need to check role manually here because App.tsx 
-      // will trigger checkUser() via onAuthStateChange and redirect appropriately.
       if (onLoginSuccess) onLoginSuccess();
-      
+
     } catch (err) {
       console.error(err);
-      setError('დაფიქსირდა შეცდომა, სცადეთ თავიდან');
+      showAlert('სისტემური შეცდომა. გთხოვთ სცადოთ მოგვიანებით.', 'error');
       setLoading(false);
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+
+    if (!validateEmail(resetEmail)) {
+      setResetError('გთხოვთ მიუთითოთ ვალიდური ელფოსტის მისამართი');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        setResetError(error.message || 'პაროლის აღდგენა ვერ მოხერხდა');
+        return;
+      }
+
+      setResetSuccess('პაროლის აღდგენის ინსტრუქცია გაგზავნილია თქვენს ელფოსტაზე.');
+    } catch (err: any) {
+      setResetError(err?.message || 'შეცდომა პაროლის აღდგენისას');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-[80vh] flex flex-col justify-center items-center py-6">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-xl shadow-indigo-100 mb-4">
-            <GraduationCap className="w-9 h-9" />
+    <div className="flex-1 min-h-[calc(100vh-130px)] grid grid-cols-1 lg:grid-cols-2">
+
+      {/* ── Left: Branding panel (desktop only) ── */}
+      <div className="hidden lg:flex flex-col justify-between bg-[#111827] p-14 relative overflow-hidden">
+        {/* Background pattern */}
+        <div className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+        {/* Blue accent blob */}
+        <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-[#2B4EFF]/15 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-16">
+            <BtaLogo size={38} />
+            <div>
+              <span className="block text-[15px] font-bold text-white tracking-tight">BTA<span className="text-[#2B4EFF]">.</span></span>
+              <span className="block text-[10px] text-gray-500 dark:text-slate-400 tracking-widest uppercase mt-0.5">სასწავლო პორტალი</span>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            საშინაო დავალებების პორტალი
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            გთხოვთ აირჩიოთ თქვენი სტატუსი და გაიაროთ ავტორიზაცია
+
+          <h2 className="text-[38px] font-black text-white leading-tight tracking-tight mb-5">
+            ბიზნესისა და<br />ტექნოლოგიების<br />
+            <span className="text-[#2B4EFF]">აკადემია</span>
+          </h2>
+          <p className="text-gray-500 dark:text-slate-400 text-[14px] leading-relaxed max-w-xs">
+            30 წელზე მეტი გამოცდილების კოლეჯი, სადაც სწავლება ახლა ციფრულ ეპოქაშია.
           </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-6 sm:p-8">
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
-                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-600" />
-                <span>{error}</span>
-              </div>
-            )}
+        <div className="relative z-10">
+          <img
+            src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=700&q=80&fit=crop"
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
+            alt="სტუდენტები"
+            className="w-full rounded-2xl object-cover shadow-2xl opacity-60"
+            style={{ height: 220 }}
+          />
+        </div>
+      </div>
 
+      {/* ── Right: Login form ── */}
+      <div className="flex items-center justify-center px-5 py-16 bg-white dark:bg-slate-900 transition-colors duration-300">
+        <div className="w-full max-w-[400px]">
+
+          {/* Mobile brand */}
+          <div className="flex items-center gap-3 mb-10 lg:hidden">
+            <BtaLogo size={34} />
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-                ელექტრონული ფოსტა (Email)
+              <span className="block text-[14px] font-bold text-gray-900 dark:text-white">BTA<span className="text-[#2B4EFF]">.</span></span>
+              <span className="block text-[10px] text-gray-400 dark:text-slate-400 uppercase tracking-widest mt-0.5">სასწავლო პორტალი</span>
+            </div>
+          </div>
+
+          {/* Header */}
+          <div className="mb-9">
+            <h1 className="text-[28px] font-black text-[#111827] dark:text-white tracking-tight leading-tight mb-2">
+              სისტემაში შესვლა
+            </h1>
+            <p className="text-[14px] text-gray-400 dark:text-slate-400">
+              შეიყვანეთ BTA-ს მიერ გაცემული მონაცემები
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="login-email-input" className="block text-[12px] font-semibold text-gray-500 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                ელ. ფოსტა
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-5 h-5" />
-                </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ელ. ფოსტა"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm transition-all outline-none"
-                />
-              </div>
+              <input
+                id="login-email-input"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="mail@bta.ge"
+                autoComplete="email"
+                className="w-full px-4 py-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:border-[#2B4EFF] focus:bg-white dark:focus:bg-slate-800 rounded-xl text-[14px] text-gray-800 dark:text-white font-medium transition-all outline-none placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30"
+              />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-                პაროლი
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="login-password-input" className="block text-[12px] font-semibold text-gray-500 dark:text-slate-300 uppercase tracking-wide">
+                  პაროლი
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetEmail(email.trim());
+                    setResetError('');
+                    setResetSuccess('');
+                    setForgotModalOpen(true);
+                  }}
+                  className="text-[12px] font-semibold text-[#2B4EFF] hover:underline transition-colors"
+                >
+                  დაგავიწყდათ პაროლი?
+                </button>
+              </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <KeyRound className="w-5 h-5" />
-                </div>
                 <input
-                  type="password"
+                  id="login-password-input"
+                  type={showPass ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="შეიყვანეთ პაროლი"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 text-sm transition-all outline-none"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="w-full px-4 pr-12 py-3.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:border-[#2B4EFF] focus:bg-white dark:focus:bg-slate-800 rounded-xl text-[14px] text-gray-800 dark:text-white font-medium transition-all outline-none placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(v => !v)}
+                  tabIndex={-1}
+                  aria-label={showPass ? 'პაროლის დამალვა' : 'პაროლის ჩვენება'}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200 p-1.5 rounded-lg transition-colors"
+                >
+                  {showPass
+                    ? <EyeOff className="w-4 h-4" />
+                    : <Eye className="w-4 h-4" />
+                  }
+                </button>
               </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60 text-base"
+              className="w-full flex items-center justify-center gap-2.5 py-3.5 text-[14px] font-semibold text-white bg-[#2B4EFF] hover:bg-[#1a35d9] disabled:opacity-60 disabled:cursor-not-allowed rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-blue-500/25 active:scale-[0.98] mt-2"
             >
               {loading ? (
-                <span>მოწმდება...</span>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  მიმდინარეობს შესვლა...
+                </>
               ) : (
                 <>
-                  <span>სისტემაში შესვლა</span>
-                  <ArrowRight className="w-5 h-5" />
+                  შესვლა
+                  <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
+
+          <p className="mt-8 text-[12px] text-center text-gray-400 dark:text-slate-500 leading-relaxed">
+            პლატფორმა განკუთვნილია <span className="font-semibold text-gray-500 dark:text-slate-400">BTA-ს</span> სტუდენტებისა და მასწავლებლებისთვის.
+          </p>
+
+          {/* Legal links in LoginPage */}
+          <div className="mt-4 flex items-center justify-center gap-3 text-[12px] text-gray-400 dark:text-slate-500">
+            <Link href="/privacy" className="hover:text-[#2B4EFF] dark:hover:text-[#2B4EFF] transition-colors underline">
+              კონფიდენციალურობის პოლიტიკა
+            </Link>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-[#2B4EFF] dark:hover:text-[#2B4EFF] transition-colors underline">
+              გამოყენების წესები
+            </Link>
+          </div>
         </div>
       </div>
+
+      {/* ── Modal: Password Recovery ("პაროლის აღდგენა") ── */}
+      {forgotModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setForgotModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forgot-password-modal-title"
+            className="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-150 text-left p-6 sm:p-7 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 id="forgot-password-modal-title" className="text-xl font-black text-gray-900 dark:text-slate-100">
+                  პაროლის აღდგენა
+                </h2>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                  შეიყვანეთ თქვენი რეგისტრირებული ელ. ფოსტა
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForgotModalOpen(false)}
+                aria-label="დახურვა"
+                className="w-9 h-9 rounded-full bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {resetSuccess ? (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-emerald-800 dark:text-emerald-300 text-xs font-semibold space-y-3 text-center">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400 mx-auto" />
+                <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">{resetSuccess}</p>
+                <button
+                  type="button"
+                  onClick={() => setForgotModalOpen(false)}
+                  className="mt-2 px-5 py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs hover:bg-emerald-700 transition-colors shadow-sm"
+                >
+                  დახურვა
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                {resetError && (
+                  <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs font-semibold rounded-xl flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{resetError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="reset-email-field" className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    ელ. ფოსტის მისამართი *
+                  </label>
+                  <input
+                    id="reset-email-field"
+                    type="email"
+                    required
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="mail@bta.ge"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:border-[#2B4EFF] focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30 rounded-xl text-sm outline-none transition-all text-gray-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setForgotModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-xs font-bold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    გაუქმება
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="px-5 py-2.5 rounded-xl bg-[#2B4EFF] hover:bg-[#1a35d9] text-white text-xs font-bold shadow-md shadow-blue-200 dark:shadow-none disabled:opacity-50 transition-all flex items-center gap-2"
+                  >
+                    {resetLoading ? 'იგზავნება...' : 'ბმულის გაგზავნა'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
-

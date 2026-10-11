@@ -14,18 +14,22 @@ import {
   Paperclip,
   RotateCcw,
   X,
-  Send
+  Send,
+  Award
 } from 'lucide-react';
 import { StudentUser, SubjectProgress, Submission, StudentAssignmentWithStatus } from '@/types';
 import { getStudentDashboardData, submitHomework, uploadFile, cancelSubmission } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { useDialog } from '@/components/ui/DialogProvider';
 
 export default function StudentDashboardPage() {
+  const { showAlert, showConfirm } = useDialog();
   const [, navigate] = useLocation();
   const [user, setUser] = useState<StudentUser | null>(null);
   const [subjectsWithProgress, setSubjectsWithProgress] = useState<SubjectProgress[]>([]);
   const [assignments, setAssignments] = useState<StudentAssignmentWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filter state
   const [filter, setFilter] = useState<'ALL' | 'TODO' | 'SUBMITTED' | 'APPROVED' | 'DECLINED'>('ALL');
@@ -68,6 +72,8 @@ export default function StudentDashboardPage() {
 
   const loadData = async () => {
     try {
+      setLoading(true);
+      setLoadError(null);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate('/login');
@@ -84,8 +90,9 @@ export default function StudentDashboardPage() {
       const data = await getStudentDashboardData(session.user.id);
       setSubjectsWithProgress(data.subjectsWithProgress);
       setAssignments(data.assignmentsWithStatus);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setLoadError('მონაცემების ჩატვირთვა ვერ მოხერხდა. გთხოვთ სცადოთ თავიდან.');
     } finally {
       setLoading(false);
     }
@@ -169,16 +176,21 @@ export default function StudentDashboardPage() {
     }
   };
 
-  const handleCancelSubmission = async (assignment: any) => {
+  const handleCancelSubmission = (assignment: any) => {
     if (!assignment.submission) return;
-    if (!window.confirm('დარწმუნებული ხართ, რომ გსურთ ატვირთული დავალების წაშლა?')) return;
-    try {
-      await cancelSubmission(assignment.submission.id);
-      loadData();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'ფაილის წაშლა ვერ მოხერხდა');
-    }
+    showConfirm(
+      'დავალების წაშლა',
+      'დარწმუნებული ხართ, რომ გსურთ ატვირთული დავალების წაშლა?',
+      async () => {
+        try {
+          await cancelSubmission(assignment.submission.id);
+          loadData();
+        } catch (err: any) {
+          console.error(err);
+          showAlert(err.message || 'ფაილის წაშლა ვერ მოხერხდა', 'error');
+        }
+      }
+    );
   };
 
   // Filter assignments
@@ -237,35 +249,62 @@ export default function StudentDashboardPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-3xl text-center space-y-4 shadow-sm">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">დაფიქსირდა შეცდომა</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">{loadError}</p>
+        <button
+          onClick={loadData}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>ხელახლა ცდა</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-16">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-violet-700 via-indigo-600 to-indigo-700 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-indigo-100 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-        <div className="space-y-2 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold text-indigo-100">
+      <div className="bg-white dark:bg-slate-800 rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative overflow-hidden">
+        
+        {/* Subtle decorative background */}
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full border-[20px] border-indigo-50/50 pointer-events-none"></div>
+        <div className="absolute bottom-0 right-32 -mb-12 w-40 h-40 rounded-full border-[10px] border-indigo-50/50 pointer-events-none"></div>
+
+        <div className="space-y-3 max-w-2xl relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">
             <GraduationCap className="w-3.5 h-3.5" />
             <span>მოსწავლის პორტალი • {user?.grade || 'X კლასი'}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             გამარჯობა, {user?.name}! 👋
           </h1>
-          <p className="text-indigo-100 text-sm leading-relaxed">
+          <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed max-w-xl">
             აქ ხედავთ თქვენს ყველა საშინაო დავალებას საგნების მიხედვით. შეგიძლიათ მარტივად ატვირთოთ რვეულის ფოტო ან ფაილი.
           </p>
         </div>
 
         {/* Overall Completion Ring / Badge */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 flex items-center gap-4 w-full sm:w-auto shrink-0 justify-between sm:justify-start">
-          <div className="text-center">
-            <p className="text-xs uppercase font-bold text-indigo-200">საერთო პროგრესი</p>
-            <p className="text-3xl font-black text-white">
-              {totalAssignmentsCount > 0 ? Math.round((approvedCount / totalAssignmentsCount) * 100) : 100}%
-            </p>
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 flex items-center gap-6 w-full lg:w-auto shrink-0 justify-between lg:justify-start relative z-10">
+          <div className="text-left">
+            <p className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-1">პროგრესი</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">
+                {totalAssignmentsCount > 0 ? Math.round((approvedCount / totalAssignmentsCount) * 100) : 100}
+              </span>
+              <span className="text-lg font-bold text-indigo-400">%</span>
+            </div>
           </div>
-          <div className="text-xs space-y-1 text-indigo-100 font-medium pl-4 border-l border-white/20">
-            <div>🟢 {approvedCount} დადასტურებული</div>
-            <div>🟡 {pendingCount} განსახილველი</div>
-            <div>🔴 {todoCount} შესასრულებელი</div>
+          <div className="text-xs space-y-2 text-slate-600 dark:text-slate-400 font-semibold pl-6 border-l border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> {approvedCount} დადასტურებული</div>
+            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"></div> {pendingCount} განსახილველი</div>
+            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-rose-500"></div> {todoCount} შესასრულებელი</div>
           </div>
         </div>
       </div>
@@ -273,11 +312,11 @@ export default function StudentDashboardPage() {
       {/* Per-Subject Progress Cards */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-600" />
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <span>ჩემი საგნების პროგრესი</span>
           </h2>
-          <span className="text-xs font-medium text-slate-500">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
             დააწკაპუნეთ საგანზე გასაფილტრად
           </span>
         </div>
@@ -294,33 +333,33 @@ export default function StudentDashboardPage() {
                 }}
                 className={`text-left p-5 rounded-2xl border transition-all duration-200 ${
                   isSelected
-                    ? 'bg-indigo-50/90 border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
-                    : 'bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-sm'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/90 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0 bg-${sub.color}-500`}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm bg-indigo-50 dark:bg-indigo-900/30 shrink-0"
                   >
-                    {sub.subjectName ? sub.subjectName.charAt(0) : '?'}
+                    <BookOpen className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                     {sub.percentage}%
                   </span>
                 </div>
 
-                <h3 className="font-bold text-slate-900 text-base">{sub.subjectName}</h3>
-                <p className="text-xs text-slate-500 mb-3">{sub.teacherName}</p>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">{sub.subjectName}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{sub.teacherName}</p>
 
                 {/* Mini Progress Bar */}
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
+                <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
                   <div
                     className="h-full bg-indigo-600 rounded-full transition-all duration-500"
                     style={{ width: `${sub.percentage}%` }}
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   <span>
                     {sub.completedAssignments} / {sub.totalAssignments} ჩაბარებული
                   </span>
@@ -339,16 +378,16 @@ export default function StudentDashboardPage() {
       {/* Assignments Filter and List */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-slate-900">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
             საშინაო დავალებები ({filteredAssignments.length})
           </h2>
 
           {/* Status Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-700 rounded-xl">
             <button
               onClick={() => setFilter('ALL')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filter === 'ALL' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                filter === 'ALL' ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               ყველა
@@ -356,7 +395,7 @@ export default function StudentDashboardPage() {
             <button
               onClick={() => setFilter('TODO')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                filter === 'TODO' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                filter === 'TODO' ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               <span>შესასრულებელი</span>
@@ -369,7 +408,7 @@ export default function StudentDashboardPage() {
             <button
               onClick={() => setFilter('SUBMITTED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filter === 'SUBMITTED' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                filter === 'SUBMITTED' ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               განსახილველი
@@ -377,7 +416,7 @@ export default function StudentDashboardPage() {
             <button
               onClick={() => setFilter('APPROVED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filter === 'APPROVED' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                filter === 'APPROVED' ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               დადასტურებული
@@ -385,7 +424,7 @@ export default function StudentDashboardPage() {
             <button
               onClick={() => setFilter('DECLINED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filter === 'DECLINED' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                filter === 'DECLINED' ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               უარყოფილი
@@ -395,10 +434,10 @@ export default function StudentDashboardPage() {
 
         {/* Assignment Cards List */}
         {filteredAssignments.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-700">
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800">ამ კატეგორიაში დავალებები არ მოიძებნა</h3>
-            <p className="text-xs text-slate-500 mt-1">შეცვალეთ ფილტრი ან აირჩიეთ სხვა საგანი</p>
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">ამ კატეგორიაში დავალებები არ მოიძებნა</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">შეცვალეთ ფილტრი ან აირჩიეთ სხვა საგანი</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
@@ -417,27 +456,27 @@ export default function StudentDashboardPage() {
               return (
                 <div
                   key={assignment.id}
-                  className={`bg-white rounded-3xl p-5 sm:p-6 border transition-all ${
+                  className={`bg-white dark:bg-slate-800 rounded-3xl p-5 sm:p-6 border transition-all ${
                     (status === 'DECLINED' || status === 'OVERDUE')
                       ? 'border-rose-300 shadow-md ring-2 ring-rose-100'
                       : status === 'APPROVED'
                       ? 'border-emerald-200/80 shadow-sm'
-                      : 'border-slate-200/90 shadow-sm hover:shadow-md'
+                      : 'border-slate-200 dark:border-slate-700/90 shadow-sm hover:shadow-md'
                   }`}
                 >
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-700">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100">
                         {assignment.subjectName}
                       </span>
-                      <span className="text-xs font-semibold text-slate-500">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                         მასწავლებელი: {assignment.teacherName}
                       </span>
                       <span
                         className={`flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${
                           isPastDue && status !== 'APPROVED' && status !== 'SUBMITTED'
-                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                            : 'bg-slate-100 text-slate-700'
+                            ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border border-rose-200'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         <Calendar className="w-3.5 h-3.5" />
@@ -446,35 +485,43 @@ export default function StudentDashboardPage() {
                     </div>
 
                     {/* Status Badge */}
-                    <div>
+                    <div className="flex flex-wrap items-center gap-2">
                       {status === 'APPROVED' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                           დადასტურებულია ✅
                         </span>
                       )}
                       {status === 'DECLINED' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 animate-pulse">
-                          <XCircle className="w-4 h-4 text-rose-600" />
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse">
+                          <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                           უარყოფილია ❌
                         </span>
                       )}
                       {status === 'OVERDUE' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                          <AlertCircle className="w-4 h-4 text-rose-600" />
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                          <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                           ვადაგასულია
                         </span>
                       )}
                       {status === 'SUBMITTED' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                          <Clock className="w-4 h-4 text-amber-600" />
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                           განსახილველია ⏳
                         </span>
                       )}
                       {status === 'TODO' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          <Clock className="w-4 h-4 text-slate-500" />
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          <Clock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                           ჩასაბარებელია
+                        </span>
+                      )}
+
+                      {/* Score / Grade Badge */}
+                      {submission?.grade !== null && submission?.grade !== undefined && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-sm">
+                          <Award className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          შეფასება: {submission.grade}/10
                         </span>
                       )}
                     </div>
@@ -482,21 +529,21 @@ export default function StudentDashboardPage() {
 
                   {/* Body */}
                   <div className="py-4 space-y-3">
-                    <h3 className="text-lg font-bold text-slate-900">{assignment.title}</h3>
-                    <p className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{assignment.title}</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">
                       {assignment.description}
                     </p>
 
                     {/* Teacher attachment */}
                     {assignment.attachmentUrl && (
-                      <div className="inline-flex max-w-full items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 overflow-hidden">
-                        <Paperclip className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <div className="inline-flex max-w-full items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 overflow-hidden">
+                        <Paperclip className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                         <span className="shrink-0">დამხმარე მასალა:</span>
                         <a
                           href={assignment.attachmentUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-indigo-600 hover:underline font-bold flex items-center gap-1 truncate min-w-0"
+                          className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold flex items-center gap-1 truncate min-w-0"
                         >
                           <span className="truncate">{assignment.attachmentName || 'ფაილის გახსნა'}</span>
                           <ExternalLink className="w-3 h-3 shrink-0" />
@@ -506,7 +553,7 @@ export default function StudentDashboardPage() {
 
                     {/* Declined Warning Box */}
                     {status === 'DECLINED' && submission?.teacherFeedback && (
-                      <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-sm space-y-1">
+                      <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-sm space-y-1">
                         <div className="flex items-center gap-1.5 font-bold text-rose-800">
                           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                           <span>მასწავლებლის კომენტარი / უარყოფის მიზეზი:</span>
@@ -514,7 +561,7 @@ export default function StudentDashboardPage() {
                         <p className="text-rose-900 font-medium pl-5 break-words">
                           "{submission.teacherFeedback}"
                         </p>
-                        <p className="text-xs text-rose-700 pt-1 font-semibold pl-5">
+                        <p className="text-xs text-rose-700 dark:text-rose-400 pt-1 font-semibold pl-5">
                           გთხოვთ შეასწოროთ ხარვეზი და ხელახლა ატვირთოთ ნამუშევარი.
                         </p>
                       </div>
@@ -522,28 +569,40 @@ export default function StudentDashboardPage() {
                     
                     {/* Overdue message */}
                     {status === 'OVERDUE' && (
-                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                      <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                         <span>დავალების ჩაბარების ვადა ამოიწურა, ჩაბარება შეუძლებელია.</span>
                       </div>
                     )}
 
                     {/* Approved Feedback Box */}
-                    {status === 'APPROVED' && submission?.teacherFeedback && (
-                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="break-words">{submission.teacherFeedback}</span>
+                    {status === 'APPROVED' && (submission?.teacherFeedback || (submission?.grade !== null && submission?.grade !== undefined)) && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
+                        <div className="flex items-center gap-2 font-bold">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>მასწავლებლის შეფასება:</span>
+                          {submission?.grade !== null && submission?.grade !== undefined && (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-black">
+                              {submission.grade}/10 ქულა
+                            </span>
+                          )}
+                        </div>
+                        {submission?.teacherFeedback && (
+                          <p className="pl-6 text-emerald-900 dark:text-emerald-200 font-medium break-words">
+                            "{submission.teacherFeedback}"
+                          </p>
+                        )}
                       </div>
                     )}
 
                     {/* Previously submitted file/link info */}
                     {submission && (
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium pt-1">
-                        <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium pt-1">
+                        <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
                         <span className="break-all">
                           ჩაბარებული ნამუშევარი: 
                           {submission.submissionLink ? (
-                            <a href={submission.submissionLink} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-bold ml-1 flex inline-flex items-center gap-1">
+                            <a href={submission.submissionLink} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold ml-1 flex inline-flex items-center gap-1">
                               ბმულის გახსნა <ExternalLink className="w-3 h-3" />
                             </a>
                           ) : (
@@ -556,8 +615,8 @@ export default function StudentDashboardPage() {
                   </div>
 
                   {/* Submission Action Footer */}
-                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="text-xs text-slate-400">
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="text-xs text-slate-400 dark:text-slate-500">
                       {status === 'APPROVED'
                         ? 'დავალება წარმატებით ჩაბარებულია'
                         : status === 'SUBMITTED'
@@ -591,7 +650,7 @@ export default function StudentDashboardPage() {
                           </button>
                           <button
                             onClick={() => handleCancelSubmission(assignment)}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold text-sm transition-colors"
                           >
                             <X className="w-4 h-4" />
                             წაშლა
@@ -603,14 +662,14 @@ export default function StudentDashboardPage() {
                         <div className="flex items-center gap-2 w-full sm:w-auto">
                           <button
                             onClick={() => openSubmitModal(assignment)}
-                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                             ფაილის შეცვლა
                           </button>
                           <button
                             onClick={() => handleCancelSubmission(assignment)}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs transition-colors"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 font-bold text-xs transition-colors"
                           >
                             <X className="w-3.5 h-3.5" />
                             წაშლა
@@ -633,23 +692,27 @@ export default function StudentDashboardPage() {
           onClick={() => setSubmitModalOpen(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-modal-title"
+            className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-150 text-left"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+            <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0 bg-white dark:bg-slate-800">
               <div className="min-w-0 flex-1 pr-3">
-                <h3 className="text-xl font-black text-slate-900 truncate">
+                <h3 id="submit-modal-title" className="text-xl font-black text-slate-900 dark:text-slate-100 truncate">
                   დავალების ჩაბარება
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5 truncate">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                   {currentAssignment.subjectName} • {currentAssignment.title}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setSubmitModalOpen(false)}
-                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center shrink-0 transition-colors"
+                aria-label="დახურვა"
+                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center shrink-0 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -659,7 +722,7 @@ export default function StudentDashboardPage() {
             <form onSubmit={handleSubmitHomework} className="flex flex-col flex-1 min-h-0">
               <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
                 {submitError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <div className="p-3 bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-rose-700 dark:text-rose-400 text-xs font-semibold rounded-xl flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{submitError}</span>
                   </div>
@@ -667,18 +730,18 @@ export default function StudentDashboardPage() {
 
                 {/* Upload or Link Toggle */}
                 <div>
-                  <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+                  <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-xl mb-4">
                     <button
                       type="button"
                       onClick={() => setSubmitMode('FILE')}
-                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitMode === 'FILE' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitMode === 'FILE' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-700 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       ფაილის ატვირთვა
                     </button>
                     <button
                       type="button"
                       onClick={() => setSubmitMode('LINK')}
-                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitMode === 'LINK' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitMode === 'LINK' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-700 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       ბმულის მითითება
                     </button>
@@ -686,20 +749,20 @@ export default function StudentDashboardPage() {
 
                   {submitMode === 'FILE' ? (
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                         ატვირთეთ ნამუშევარი *
                       </label>
                       {currentAssignment.allowedFormats && currentAssignment.allowedFormats.length > 0 && (
-                        <p className="text-xs text-indigo-600 mb-3 font-medium">დაშვებული ფორმატები: {currentAssignment.allowedFormats.map(f => f.replace(/\./g, '').toUpperCase()).join(', ')}</p>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-3 font-medium">დაშვებული ფორმატები: {currentAssignment.allowedFormats.map(f => f.replace(/\./g, '').toUpperCase()).join(', ')}</p>
                       )}
 
                       {fileUrl ? (
-                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 min-w-0">
+                        <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 min-w-0">
                           <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
-                            <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+                            <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                             <div className="truncate min-w-0 flex-1">
                               <p className="text-xs font-bold text-indigo-900 truncate">{fileName}</p>
-                              <p className="text-[11px] text-indigo-600">{fileSize}</p>
+                              <p className="text-[11px] text-indigo-600 dark:text-indigo-400">{fileSize}</p>
                             </div>
                           </div>
                           <button
@@ -715,14 +778,14 @@ export default function StudentDashboardPage() {
                           </button>
                         </div>
                       ) : (
-                        <label className="flex flex-col items-center justify-center p-6 sm:p-8 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl cursor-pointer bg-indigo-50/40 hover:bg-indigo-50/80 transition-all">
-                          <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mb-3 shadow-sm">
+                        <label className="flex flex-col items-center justify-center p-6 sm:p-8 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl cursor-pointer bg-indigo-50/50 dark:bg-indigo-900/20 hover:bg-indigo-50/80 dark:hover:bg-indigo-900/40 transition-all">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-sm">
                             <Upload className="w-6 h-6" />
                           </div>
-                          <span className="text-sm font-bold text-indigo-950 text-center">
+                          <span className="text-sm font-bold text-indigo-950 dark:text-slate-100 text-center">
                             {uploading ? 'მიმდინარეობს ატვირთვა...' : 'დააჭირეთ ან ჩააგდეთ ფაილი აქ'}
                           </span>
-                          <span className="text-xs text-slate-500 mt-1 text-center">
+                          <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-center">
                             მობილურიდან შეგიძლიათ გადაიღოთ რვეულის ფოტო
                           </span>
                           <input
@@ -737,15 +800,16 @@ export default function StudentDashboardPage() {
                     </div>
                   ) : (
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label htmlFor="submission-link-input" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                         ჩასვით ბმული (Google Drive, Docs და ა.შ.) *
                       </label>
                       <input
+                        id="submission-link-input"
                         type="url"
                         value={submissionLink}
                         onChange={(e) => setSubmissionLink(e.target.value)}
                         placeholder="https://..."
-                        className="w-full px-4 py-3 bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 transition-colors"
                       />
                     </div>
                   )}
@@ -753,25 +817,26 @@ export default function StudentDashboardPage() {
 
                 {/* Student Comment */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label htmlFor="student-comment-input" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     თქვენი კომენტარი მასწავლებლისთვის (სურვილისამებრ)
                   </label>
                   <textarea
+                    id="student-comment-input"
                     rows={3}
                     value={studentComment}
                     onChange={(e) => setStudentComment(e.target.value)}
                     placeholder="მაგ: მე-4 სავარჯიშოში ორივე ხერხი გამოვიყენე..."
-                    className="w-full px-4 py-3 bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none transition-colors"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-slate-900 dark:text-slate-100 transition-colors"
                   />
                 </div>
               </div>
 
               {/* Pinned Modal Footer */}
-              <div className="p-4 sm:p-5 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0 bg-slate-50/70">
+              <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-3 shrink-0 bg-slate-50 dark:bg-slate-900/70">
                 <button
                   type="button"
                   onClick={() => setSubmitModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-white transition-colors"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors"
                 >
                   გაუქმება
                 </button>

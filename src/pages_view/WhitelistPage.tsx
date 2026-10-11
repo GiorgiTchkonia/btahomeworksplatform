@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { School, GraduationCap, ArrowLeft, Mail, ShieldCheck, X } from 'lucide-react';
+import { School, GraduationCap, ArrowLeft, Mail, ShieldCheck, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { SafeTeacherUser, SafeStudentUser } from '@/types';
 import { getWhitelist } from '@/lib/api';
 
@@ -9,16 +9,26 @@ export default function WhitelistPage() {
   const [teachers, setTeachers] = useState<SafeTeacherUser[]>([]);
   const [students, setStudents] = useState<SafeStudentUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<SafeTeacherUser | SafeStudentUser | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setLoadError(null);
     getWhitelist()
       .then((data) => {
         setTeachers(data.teachers as SafeTeacherUser[]);
         setStudents(data.students as SafeStudentUser[]);
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setLoadError('მომხმარებელთა სიის ჩატვირთვა ვერ მოხერხდა.');
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   return (
@@ -26,7 +36,7 @@ export default function WhitelistPage() {
       <div className="flex items-center justify-between">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           მთავარ გვერდზე დაბრუნება
@@ -48,13 +58,32 @@ export default function WhitelistPage() {
           </p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/10 shrink-0 text-center">
-          <div className="text-xs uppercase font-bold text-slate-400">სულ რეგისტრირებული</div>
+        <div className="bg-white/10 dark:bg-slate-800/40 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/10 shrink-0 text-center">
+          <div className="text-xs uppercase font-bold text-slate-400 dark:text-slate-500">სულ რეგისტრირებული</div>
           <div className="text-2xl font-black text-white mt-1">
             {teachers.length + students.length} მომხმარებელი
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-2xl p-6 text-center my-6">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
+          <h3 className="text-base font-bold text-rose-900 dark:text-rose-200 mb-1">
+            მონაცემების ჩატვირთვა ვერ მოხერხდა
+          </h3>
+          <p className="text-sm text-rose-700 dark:text-rose-300 mb-4">
+            {loadError}
+          </p>
+          <button
+            onClick={loadData}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            ხელახლა ცდა
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center min-h-[30vh]">
@@ -64,8 +93,8 @@ export default function WhitelistPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Teachers Section */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-slate-900 font-bold text-lg">
-              <School className="w-5 h-5 text-indigo-600" />
+            <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100 font-bold text-lg">
+              <School className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               <h2>მასწავლებლების სია ({teachers.length})</h2>
             </div>
 
@@ -74,18 +103,18 @@ export default function WhitelistPage() {
                 <div
                   key={teacher.id}
                   onClick={() => setSelectedUser(teacher)}
-                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all"
+                  className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all"
                 >
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-slate-900">{teacher.name}</span>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      <span className="font-bold text-slate-900 dark:text-slate-100">{teacher.name}</span>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100">
                         {teacher.subject}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 font-medium min-w-0">
+                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-medium min-w-0">
                       <span className="flex items-center gap-1 min-w-0 truncate">
-                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <Mail className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
                         <span className="truncate">{teacher.email}</span>
                       </span>
                     </div>
@@ -97,7 +126,7 @@ export default function WhitelistPage() {
 
           {/* Students Section */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-slate-900 font-bold text-lg">
+            <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100 font-bold text-lg">
               <GraduationCap className="w-5 h-5 text-emerald-600" />
               <h2>მოსწავლეების სია ({students.length})</h2>
             </div>
@@ -107,18 +136,18 @@ export default function WhitelistPage() {
                 <div
                   key={student.id}
                   onClick={() => setSelectedUser(student)}
-                  className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all"
+                  className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all"
                 >
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-slate-900">{student.name}</span>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                      <span className="font-bold text-slate-900 dark:text-slate-100">{student.name}</span>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100">
                         {student.grade}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 font-medium min-w-0">
+                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-medium min-w-0">
                       <span className="flex items-center gap-1 min-w-0 truncate">
-                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <Mail className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
                         <span className="truncate">{student.email}</span>
                       </span>
                     </div>
@@ -133,12 +162,19 @@ export default function WhitelistPage() {
       {/* User Profile Modal */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="whitelist-modal-title"
+            className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-200"
+          >
             {/* Header/Cover */}
             <div className={`h-24 w-full ${selectedUser.role === 'TEACHER' ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
               <button
+                type="button"
                 onClick={() => setSelectedUser(null)}
-                className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors backdrop-blur-md"
+                aria-label="დახურვა"
+                className="absolute top-4 right-4 p-2 bg-white/20 dark:bg-slate-800/40 hover:bg-white/30 dark:hover:bg-slate-800/60 text-white rounded-full transition-colors backdrop-blur-md"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -150,27 +186,27 @@ export default function WhitelistPage() {
                 {selectedUser.name ? selectedUser.name.charAt(0) : '?'}
               </div>
               
-              <h3 className="mt-3 text-xl font-bold text-slate-900 text-center">
+              <h3 id="whitelist-modal-title" className="mt-3 text-xl font-bold text-slate-900 dark:text-slate-100 text-center">
                 {selectedUser.name}
               </h3>
-              <p className="text-sm font-semibold text-slate-500 mt-1">
+              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">
                 {selectedUser.role === 'TEACHER' ? 'მასწავლებელი' : 'მოსწავლე'}
               </p>
             </div>
 
             {/* Details */}
             <div className="p-6 space-y-4">
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 font-medium">ელ. ფოსტა</span>
-                  <span className="font-bold text-slate-900 truncate max-w-[150px]">{selectedUser.email}</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">ელ. ფოსტა</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100 truncate max-w-[150px]">{selectedUser.email}</span>
                 </div>
-                <div className="h-px bg-slate-200"></div>
+                <div className="h-px bg-slate-200 dark:bg-slate-600"></div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 font-medium">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">
                     {selectedUser.role === 'TEACHER' ? 'საგანი' : 'კლასი'}
                   </span>
-                  <span className="font-bold text-slate-900">
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
                     {selectedUser.role === 'TEACHER' ? (selectedUser as SafeTeacherUser).subject : (selectedUser as SafeStudentUser).grade}
                   </span>
                 </div>

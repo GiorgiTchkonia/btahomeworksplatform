@@ -167,10 +167,10 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-white border rounded-2xl transition-all text-left shadow-sm ${
+        className={`w-full flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-900 hover:bg-white dark:hover:bg-slate-800 border rounded-2xl transition-all text-left shadow-sm ${
           isOpen
-            ? 'border-indigo-500 ring-4 ring-indigo-100/70 bg-white'
-            : 'border-slate-200 hover:border-indigo-300'
+            ? 'border-indigo-500 ring-4 ring-indigo-100/70 bg-white dark:bg-slate-800'
+            : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
@@ -180,20 +180,20 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
           <div className="truncate">
             {display ? (
               <>
-                <p className="text-sm font-bold text-slate-900 truncate">
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                   {display.dateStr}
                 </p>
-                <p className="text-xs font-semibold text-indigo-600 flex items-center gap-1 mt-0.5">
+                <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 mt-0.5">
                   <Clock className="w-3.5 h-3.5" />
                   <span>ჩაბარების დრო: {display.timeStr}</span>
                 </p>
               </>
             ) : (
               <>
-                <p className="text-sm font-bold text-slate-700">
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                   აირჩიეთ ჩაბარების ვადა
                 </p>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 dark:text-slate-500">
                   დააწკაპუნეთ კალენდრისა და დროის ასარჩევად
                 </p>
               </>
@@ -202,12 +202,12 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
         </div>
 
         <div className="flex items-center gap-2 shrink-0 ml-3">
-          <span className="hidden sm:inline-block px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+          <span className="hidden sm:inline-block px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100">
             {isOpen ? 'დახურვა' : 'არჩევა'}
           </span>
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-              isOpen ? 'rotate-180 text-indigo-600' : ''
+            className={`w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform duration-200 ${
+              isOpen ? 'rotate-180 text-indigo-600 dark:text-indigo-400' : ''
             }`}
           />
         </div>
@@ -215,18 +215,18 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
 
       {/* Expandable Calendar & Time Picker */}
       {isOpen && (
-        <div className="mt-3 w-full bg-slate-50/90 rounded-2xl p-4 sm:p-5 border border-indigo-100 shadow-sm transition-all animate-in fade-in duration-150">
+        <div className="mt-3 w-full bg-slate-50 dark:bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-indigo-100 shadow-sm transition-all animate-in fade-in duration-150">
           {/* Header with Quick Presets */}
-          <div className="pb-3 border-b border-slate-100 space-y-2">
+          <div className="pb-3 border-b border-slate-100 dark:border-slate-700 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 სწრაფი არჩევა (1-დაწკაპუნებით)
               </span>
               <button
                 type="button"
                 onClick={() => applyPreset(1, 23, 59)}
-                className="text-[11px] font-semibold text-indigo-600 hover:underline flex items-center gap-1"
+                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
               >
                 <RotateCcw className="w-3 h-3" />
                 ხვალ
@@ -237,28 +237,28 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
               <button
                 type="button"
                 onClick={() => applyPreset(1, 23, 59)}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white transition-colors border border-indigo-100"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white dark:hover:text-white transition-colors border border-indigo-100 dark:border-indigo-800"
               >
                 ხვალ (23:59)
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset(3, 23, 59)}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white transition-colors border border-indigo-100"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white dark:hover:text-white transition-colors border border-indigo-100 dark:border-indigo-800"
               >
                 3 დღეში
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset(7, 23, 59)}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white transition-colors border border-indigo-100"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white dark:hover:text-white transition-colors border border-indigo-100 dark:border-indigo-800"
               >
                 1 კვირაში
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset(14, 23, 59)}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white transition-colors border border-indigo-100"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white dark:hover:text-white transition-colors border border-indigo-100 dark:border-indigo-800"
               >
                 2 კვირაში
               </button>
@@ -270,19 +270,19 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
             <button
               type="button"
               onClick={prevMonth}
-              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 flex items-center justify-center transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="text-center">
-              <h4 className="text-sm font-extrabold text-slate-900">
+              <h4 className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
                 {MONTH_NAMES[viewMonth]} {viewYear}
               </h4>
             </div>
             <button
               type="button"
               onClick={nextMonth}
-              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 flex items-center justify-center transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -294,7 +294,7 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
               <span
                 key={dayName}
                 className={`text-[11px] font-bold py-1 ${
-                  idx >= 5 ? 'text-rose-500' : 'text-slate-400'
+                  idx >= 5 ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'
                 }`}
               >
                 {dayName}
@@ -335,8 +335,8 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
                       : isPast
                       ? 'text-slate-300 cursor-not-allowed'
                       : isToday
-                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-extrabold'
-                      : 'text-slate-700 hover:bg-slate-100'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 font-extrabold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
                 >
                   {dayNumber}
@@ -346,13 +346,13 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
           </div>
 
           {/* Time Picker Section */}
-          <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 ჩაბარების დრო
               </span>
-              <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+              <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md">
                 {pad(selectedHour)}:{pad(selectedMinute)}
               </span>
             </div>
@@ -360,13 +360,13 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
             {/* Hours & Minutes Selectors */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">
                   საათი
                 </label>
                 <select
                   value={selectedHour}
                   onChange={(e) => handleSelectTime(Number(e.target.value), selectedMinute)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {Array.from({ length: 24 }).map((_, h) => (
                     <option key={`hour-${h}`} value={h}>
@@ -377,13 +377,13 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1">
                   წუთი
                 </label>
                 <select
                   value={selectedMinute}
                   onChange={(e) => handleSelectTime(selectedHour, Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {[0, 15, 30, 45, 59].map((m) => (
                     <option key={`minute-${m}`} value={m}>
@@ -404,7 +404,7 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
                   className={`text-[11px] px-2 py-1 rounded-lg font-medium transition-all ${
                     selectedHour === t.hour && selectedMinute === t.minute
                       ? 'bg-indigo-600 text-white font-bold'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                      : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-400'
                   }`}
                 >
                   {t.label}
@@ -414,8 +414,8 @@ export default function DateTimePicker({ value, onChange }: DateTimePickerProps)
           </div>
 
           {/* Confirm Button */}
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs text-slate-400">
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <span className="text-xs text-slate-400 dark:text-slate-500">
               დააჭირეთ მზადყოფნისთვის
             </span>
             <button

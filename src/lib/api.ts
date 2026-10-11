@@ -1,44 +1,157 @@
-import { supabaseAdmin } from './supabase-admin';
+import { supabaseAdmin, isLocalAdminConfigured } from './supabase-admin';
 import { supabase } from './supabase';
-import { User, StudentAssignmentWithStatus, SubjectProgress, AssignmentWithMeta, Submission } from '@/types';
+import {
+  User,
+  StudentAssignmentWithStatus,
+  SubjectProgress,
+  AssignmentWithMeta,
+  Submission,
+  Assignment,
+  CreateAssignmentParams,
+  AddWhitelistUserData,
+  AdminUpdateUserData,
+  UpdateProfileUpdates
+} from '@/types';
 
-import imageCompression from 'browser-image-compression';
+
+// ---------------------------------------------------------
+// Storage & URL Security Utilities
+// ---------------------------------------------------------
+export const MIME_MAP: Record<string, string[]> = {
+  pdf: ['application/pdf'],
+  doc: ['application/msword'],
+  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  xls: ['application/vnd.ms-excel'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ppt: ['application/vnd.ms-powerpoint'],
+  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  jpg: ['image/jpeg'],
+  jpeg: ['image/jpeg'],
+  png: ['image/png'],
+  webp: ['image/webp'],
+  gif: ['image/gif'],
+  txt: ['text/plain'],
+  zip: ['application/zip', 'application/x-zip-compressed'],
+  rar: ['application/x-rar-compressed', 'application/vnd.rar', 'application/octet-stream'],
+};
+
+/**
+ * Strict validator for submission links.
+ * Requires valid HTTPS URL and allowed Google Drive/Docs hostnames to prevent XSS.
+ */
+export function isValidSubmissionUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'https:') return false;
+    const allowedHosts = ['drive.google.com', 'docs.google.com'];
+    return allowedHosts.includes(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extracts relative storage path {folder}/{filename} from a public or relative storage URL.
+ */
+export function extractStoragePath(urlOrPath: string | null | undefined): string | null {
+  if (!urlOrPath) return null;
+  if (!urlOrPath.startsWith('http://') && !urlOrPath.startsWith('https://')) {
+    return urlOrPath.startsWith('/') ? urlOrPath.slice(1) : urlOrPath;
+  }
+  const match = urlOrPath.match(/\/homework-files\/(.+?)(\?.*)?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Generates an authenticated signed URL for private storage access,
+ * falling back to public URL if signed URL creation is unavailable.
+ */
+export async function getFileViewUrl(fileUrlOrPath: string | null | undefined): Promise<string> {
+  if (!fileUrlOrPath) return '';
+  if (fileUrlOrPath.startsWith('/demo-') || fileUrlOrPath.startsWith('/uploads/')) {
+    return fileUrlOrPath;
+  }
+  const storagePath = extractStoragePath(fileUrlOrPath);
+  if (!storagePath) return fileUrlOrPath;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from('homework-files')
+      .createSignedUrl(storagePath, 3600);
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+  } catch (err) {
+    console.warn('Signed URL generation failed, falling back to public URL:', err);
+  }
+
+  const { data } = supabase.storage.from('homework-files').getPublicUrl(storagePath);
+  return data.publicUrl || fileUrlOrPath;
+}
 
 // ---------------------------------------------------------
 // File Upload
 // ---------------------------------------------------------
-export async function uploadFile(file: File) {
+export async function uploadFile(
+  file: File,
+  options?: { studentId?: string; allowedFormats?: string[] }
+) {
   const maxFileSize = 15 * 1024 * 1024;
   if (file.size > maxFileSize) {
     throw new Error('ფაილის ზომა არ უნდა აღემატებოდეს 15MB-ს.');
   }
 
   const fileExt = file.name.split('.').pop()?.toLowerCase();
-  const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'txt', 'zip', 'rar'];
+  const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'txt', 'zip', 'rar'];
   
   if (!fileExt || !allowedExtensions.includes(fileExt)) {
     throw new Error('ფაილის ფორმატი დაუშვებელია.');
   }
 
+  // Validate against teacher's allowed formats if specified
+  if (options?.allowedFormats && options.allowedFormats.length > 0) {
+    const normalizedAllowed = options.allowedFormats.map(fmt => fmt.toLowerCase().replace(/^\./, ''));
+    if (!normalizedAllowed.includes(fileExt)) {
+      throw new Error(`ფაილის ფორმატი (.${fileExt}) დაუშვებელია ამ დავალებისთვის. დაშვებული ფორმატებია: ${options.allowedFormats.join(', ')}`);
+    }
+  }
+
+  // Validate MIME type if file.type is available
+  if (file.type && MIME_MAP[fileExt]) {
+    const expectedMimes = MIME_MAP[fileExt];
+    if (!expectedMimes.includes(file.type.toLowerCase())) {
+      throw new Error('ფაილის MIME ტიპი არ შეესაბამება გაფართოებას.');
+    }
+  }
+
   let finalFile = file;
-  if (['jpg', 'jpeg', 'png'].includes(fileExt)) {
+  if (['jpg', 'jpeg', 'png', 'webp'].includes(fileExt)) {
     try {
-      const options = {
-        maxSizeMB: 1, // დააპატარავებს 1MB-მდე
+      const imageCompression = (await import('browser-image-compression')).default;
+      const compressionOptions = {
+        maxSizeMB: 1, // Compress to ~1MB
         maxWidthOrHeight: 1920,
         useWebWorker: true,
       };
-      const compressedBlob = await imageCompression(file, options);
+      const compressedBlob = await imageCompression(file, compressionOptions);
       finalFile = new File([compressedBlob], file.name, { type: compressedBlob.type });
     } catch (e) {
       console.error('Image compression failed:', e);
     }
   }
 
-  const fileName = `${crypto.randomUUID()}.${fileExt}`;
-  const filePath = `${fileName}`;
+  // Organize under folder {userId} to comply with storage RLS policies
+  let folderId = options?.studentId;
+  if (!folderId) {
+    const { data: authData } = await supabase.auth.getUser();
+    folderId = authData?.user?.id || 'general';
+  }
 
-  const { error, data } = await supabase.storage
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+  const filePath = `${folderId}/${fileName}`;
+
+  const { error } = await supabase.storage
     .from('homework-files')
     .upload(filePath, finalFile);
 
@@ -59,23 +172,28 @@ export async function uploadFile(file: File) {
 // Student Dashboard
 // ---------------------------------------------------------
 export async function getStudentDashboardData(studentId: string) {
-  // 1. Fetch all subjects
-  const { data: subjects, error: error1 } = await supabase.from('subjects').select('*, profiles!teacher_id(name)');
-  if (error1) throw new Error(error1.message);
-  // 2. Fetch all assignments
-  const { data: assignments, error: error2 } = await supabase.from('assignments').select('*');
-  if (error2) throw new Error(error2.message);
-  // 3. Fetch submissions for this student
-  const { data: submissions, error: error3 } = await supabase.from('submissions').select('*').eq('student_id', studentId);
-  if (error3) throw new Error(error3.message);
+  // Parallel fetch: subjects, assignments, and submissions for student
+  const [subjectsRes, assignmentsRes, submissionsRes] = await Promise.all([
+    supabase.from('subjects').select('*, profiles!teacher_id(name)'),
+    supabase.from('assignments').select('*'),
+    supabase.from('submissions').select('*').eq('student_id', studentId),
+  ]);
+
+  if (subjectsRes.error) throw new Error(subjectsRes.error.message);
+  if (assignmentsRes.error) throw new Error(assignmentsRes.error.message);
+  if (submissionsRes.error) throw new Error(submissionsRes.error.message);
+
+  const subjects = subjectsRes.data;
+  const assignments = assignmentsRes.data;
+  const submissions = submissionsRes.data;
 
   const subjectMap = new Map(subjects?.map(s => [s.id, s]));
   const studentSubmissionMap = new Map(submissions?.map(s => [s.assignment_id, s]));
 
-  const assignmentsBySubject = new Map<string, any[]>();
+  const assignmentsBySubject = new Map<string, Array<Record<string, unknown>>>();
   for (const a of (assignments || [])) {
     const bucket = assignmentsBySubject.get(a.subject_id) || [];
-    bucket.push(a);
+    bucket.push(a as Record<string, unknown>);
     assignmentsBySubject.set(a.subject_id, bucket);
   }
 
@@ -146,6 +264,7 @@ export async function getStudentDashboardData(studentId: string) {
           studentComment: submission.student_comment,
           status: submission.status,
           teacherFeedback: submission.teacher_feedback,
+          grade: submission.grade ?? null,
           submittedAt: submission.submitted_at,
           reviewedAt: submission.reviewed_at
         } : null,
@@ -166,6 +285,13 @@ export async function submitHomework(params: {
   submissionLink?: string;
   studentComment?: string;
 }) {
+  // Validate submission link if provided
+  if (params.submissionLink) {
+    if (!isValidSubmissionUrl(params.submissionLink)) {
+      throw new Error('გთხოვთ მიუთითოთ მხოლოდ ვალიდური HTTPS Google Drive ან Google Docs ბმული.');
+    }
+  }
+
   // Fetch assignment to check due date
   const { data: assignmentData, error: assignmentError } = await supabase.from('assignments')
     .select('due_date')
@@ -180,10 +306,23 @@ export async function submitHomework(params: {
 
   // Check if exists
   const { data: existing } = await supabase.from('submissions')
-    .select('id')
+    .select('id, file_url')
     .eq('assignment_id', params.assignmentId)
     .eq('student_id', params.studentId)
     .maybeSingle();
+
+  // If re-uploading and file changed, cleanup old storage file
+  if (existing && existing.file_url && params.fileUrl && existing.file_url !== params.fileUrl) {
+    const oldPath = extractStoragePath(existing.file_url);
+    const newPath = extractStoragePath(params.fileUrl);
+    if (oldPath && oldPath !== newPath) {
+      try {
+        await supabase.storage.from('homework-files').remove([oldPath]);
+      } catch (storageErr) {
+        console.warn('Failed to cleanup old storage file on re-submission:', storageErr);
+      }
+    }
+  }
 
   const now = new Date().toISOString();
 
@@ -220,9 +359,9 @@ export async function submitHomework(params: {
 }
 
 export async function cancelSubmission(submissionId: string) {
-  // Get assignment ID for this submission
+  // Get assignment ID and file_url for this submission
   const { data: subData } = await supabase.from('submissions')
-    .select('assignment_id')
+    .select('assignment_id, file_url')
     .eq('id', submissionId)
     .single();
 
@@ -235,6 +374,18 @@ export async function cancelSubmission(submissionId: string) {
     if (assignmentData && new Date(assignmentData.due_date).getTime() < Date.now()) {
       throw new Error('დავალების ვადა ამოიწურა. ფაილის წაშლა ან შეცვლა შეუძლებელია.');
     }
+
+    // Clean up stored file if present
+    if (subData.file_url) {
+      const storagePath = extractStoragePath(subData.file_url);
+      if (storagePath) {
+        try {
+          await supabase.storage.from('homework-files').remove([storagePath]);
+        } catch (storageErr) {
+          console.warn('Failed to delete storage file on cancellation:', storageErr);
+        }
+      }
+    }
   }
 
   const { error } = await supabase.from('submissions').delete().eq('id', submissionId);
@@ -246,17 +397,25 @@ export async function cancelSubmission(submissionId: string) {
 // Teacher Dashboard
 // ---------------------------------------------------------
 export async function getTeacherDashboardData(teacherId: string) {
-  const { data: subjects, error: error1 } = await supabase.from('subjects').select('*').eq('teacher_id', teacherId);
-  if (error1) throw new Error(error1.message);
-  const { data: assignments, error: error2 } = await supabase.from('assignments').select('*').eq('teacher_id', teacherId);
-  if (error2) throw new Error(error2.message);
-  const { data: submissions, error: error3 } = await supabase.from('submissions').select('assignment_id, status, profiles!inner(*)').eq('profiles.role', 'STUDENT');
-  if (error3) throw new Error(error3.message);
-  const { data: students, error: error4 } = await supabase.from('profiles').select('*').eq('role', 'STUDENT');
-  if (error4) throw new Error(error4.message);
+  const [subjectsRes, assignmentsRes, submissionsRes, studentsRes] = await Promise.all([
+    supabase.from('subjects').select('*').eq('teacher_id', teacherId),
+    supabase.from('assignments').select('*').eq('teacher_id', teacherId),
+    supabase.from('submissions').select('assignment_id, status, profiles!inner(*)').eq('profiles.role', 'STUDENT'),
+    supabase.from('profiles').select('*').eq('role', 'STUDENT'),
+  ]);
+
+  if (subjectsRes.error) throw new Error(subjectsRes.error.message);
+  if (assignmentsRes.error) throw new Error(assignmentsRes.error.message);
+  if (submissionsRes.error) throw new Error(submissionsRes.error.message);
+  if (studentsRes.error) throw new Error(studentsRes.error.message);
+
+  const subjects = subjectsRes.data;
+  const assignments = assignmentsRes.data;
+  const submissions = submissionsRes.data;
+  const students = studentsRes.data;
   const totalStudents = students?.length || 0;
 
-  const submissionCounts = new Map(); // assignmentId -> { approved, declined, pending }
+  const submissionCounts = new Map<string, { approved: number; declined: number; pending: number }>();
   
   for (const asg of (assignments || [])) {
     submissionCounts.set(asg.id, { approved: 0, declined: 0, pending: 0 });
@@ -295,7 +454,7 @@ export async function getTeacherDashboardData(teacherId: string) {
   return { subjects: subjects || [], assignments: dashboardAssignments, totalStudents };
 }
 
-export async function createAssignment(params: any) {
+export async function createAssignment(params: CreateAssignmentParams) {
   const { data, error } = await supabase.from('assignments').insert({
     subject_id: params.subjectId,
     teacher_id: params.teacherId,
@@ -316,20 +475,65 @@ export async function deleteAssignment(assignmentId: string) {
   return true;
 }
 
+export async function updateAssignment(
+  assignmentId: string, 
+  updates: Partial<Assignment>
+): Promise<Assignment | null> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.subjectId !== undefined) dbUpdates.subject_id = updates.subjectId;
+  if (updates.teacherId !== undefined) dbUpdates.teacher_id = updates.teacherId;
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+  if (updates.attachmentUrl !== undefined) dbUpdates.attachment_url = updates.attachmentUrl;
+  if (updates.attachmentName !== undefined) dbUpdates.attachment_name = updates.attachmentName;
+  if (updates.allowedFormats !== undefined) dbUpdates.allowed_formats = updates.allowedFormats;
+
+  const { data, error } = await supabase
+    .from('assignments')
+    .update(dbUpdates)
+    .eq('id', assignmentId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    subjectId: data.subject_id,
+    teacherId: data.teacher_id,
+    title: data.title,
+    description: data.description,
+    dueDate: data.due_date,
+    attachmentUrl: data.attachment_url,
+    attachmentName: data.attachment_name,
+    allowedFormats: data.allowed_formats || [],
+    createdAt: data.created_at,
+  };
+}
+
 export async function getAssignmentDetails(assignmentId: string) {
   const { data: assignment, error: error1 } = await supabase.from('assignments').select('*').eq('id', assignmentId).single();
   if (error1) throw new Error(error1.message);
   if (!assignment) return null;
 
-  const { data: subject, error: error2 } = await supabase.from('subjects').select('*').eq('id', assignment.subject_id).single();
-  if (error2) throw new Error(error2.message);
-  const { data: teacher, error: error3 } = await supabase.from('profiles').select('*').eq('id', assignment.teacher_id).single();
-  if (error3) throw new Error(error3.message);
-  
-  const { data: submissions, error: error4 } = await supabase.from('submissions').select('*').eq('assignment_id', assignmentId);
-  if (error4) throw new Error(error4.message);
-  const { data: students, error: error5 } = await supabase.from('profiles').select('*').eq('role', 'STUDENT');
-  if (error5) throw new Error(error5.message);
+  const [subjectRes, teacherRes, submissionsRes, studentsRes] = await Promise.all([
+    supabase.from('subjects').select('*').eq('id', assignment.subject_id).single(),
+    supabase.from('profiles').select('*').eq('id', assignment.teacher_id).single(),
+    supabase.from('submissions').select('*').eq('assignment_id', assignmentId),
+    supabase.from('profiles').select('*').eq('role', 'STUDENT'),
+  ]);
+
+  if (subjectRes.error) throw new Error(subjectRes.error.message);
+  if (teacherRes.error) throw new Error(teacherRes.error.message);
+  if (submissionsRes.error) throw new Error(submissionsRes.error.message);
+  if (studentsRes.error) throw new Error(studentsRes.error.message);
+
+  const subject = subjectRes.data;
+  const teacher = teacherRes.data;
+  const submissions = submissionsRes.data;
+  const students = studentsRes.data;
 
   let approvedCount = 0;
   let declinedCount = 0;
@@ -347,6 +551,7 @@ export async function getAssignmentDetails(assignmentId: string) {
     studentComment: s.student_comment,
     status: s.status,
     teacherFeedback: s.teacher_feedback,
+    grade: s.grade ?? null,
     submittedAt: s.submitted_at,
     reviewedAt: s.reviewed_at
   }]));
@@ -386,14 +591,36 @@ export async function getAssignmentDetails(assignmentId: string) {
   };
 }
 
-export async function reviewSubmission(submissionId: string, status: 'APPROVED' | 'DECLINED', feedback: string) {
-  const { data, error } = await supabase.from('submissions').update({
+export async function reviewSubmission(
+  submissionId: string, 
+  status: 'APPROVED' | 'DECLINED', 
+  feedback: string,
+  grade?: number | null
+): Promise<void> {
+  if (!submissionId) throw new Error('submissionId is required');
+  if (!['APPROVED', 'DECLINED'].includes(status)) throw new Error('status must be APPROVED or DECLINED');
+
+  let sanitizedGrade: number | null = null;
+  if (grade !== undefined && grade !== null && (grade as unknown as string) !== '') {
+    const num = Number(grade);
+    if (!Number.isInteger(num)) {
+      throw new Error('შეფასება უნდა იყოს მთელი რიცხვი');
+    }
+    if (num < 1 || num > 10) {
+      throw new Error('შეფასება უნდა იყოს 1-დან 10-მდე');
+    }
+    sanitizedGrade = num;
+  }
+
+  const updatePayload: Record<string, any> = {
     status,
-    teacher_feedback: feedback,
-    reviewed_at: new Date().toISOString()
-  }).eq('id', submissionId).select().single();
+    teacher_feedback: feedback ? feedback.trim() : (status === 'APPROVED' ? 'ძალიან კარგია, მიღებულია!' : 'საჭიროებს შესწორებას'),
+    reviewed_at: new Date().toISOString(),
+    grade: sanitizedGrade,
+  };
+
+  const { error } = await supabase.from('submissions').update(updatePayload).eq('id', submissionId);
   if (error) throw error;
-  return data;
 }
 
 // ---------------------------------------------------------
@@ -408,86 +635,144 @@ export async function getAllUsersForAdmin() {
   return { teachers, students, admins };
 }
 
-export async function addWhitelistUser(user: any) {
-  if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized.");
-  
-  // 1. Create user in auth
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: user.email,
-    password: user.password,
-    email_confirm: true
-  });
-  
-  if (authError) throw new Error(authError.message);
-  
-  // 2. Add to profiles table
-  const newUserId = authData.user.id;
-  const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-    id: newUserId,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    grade: user.grade || null,
-    subject: user.subject || null,
-    phone: user.phone || null
-  });
-  
-  if (profileError) {
-    // rollback
-    await supabaseAdmin.auth.admin.deleteUser(newUserId);
-    throw new Error(profileError.message);
+export async function addWhitelistUser(user: AddWhitelistUserData) {
+  // 1. Invoke Supabase Edge Function 'admin-users' first
+  try {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'create', user }
+    });
+    if (!error && data?.user) {
+      return data.user;
+    }
+    if (error) {
+      console.warn('Edge Function admin-users invocation failed, attempting local fallback:', error);
+    }
+  } catch (edgeErr) {
+    console.warn('Edge Function admin-users threw error, attempting local fallback:', edgeErr);
   }
-  
-  return authData.user;
+
+  // 2. Safe fallback for local development if Edge Function is offline
+  if (isLocalAdminConfigured()) {
+    console.warn('Executing addWhitelistUser via local supabaseAdmin fallback');
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: user.email,
+      password: user.password,
+      email_confirm: true
+    });
+    if (authError) throw new Error(authError.message);
+
+    const newUserId = authData.user.id;
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+      id: newUserId,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      grade: user.grade || null,
+      subject: user.subject || null,
+      phone: user.phone || null
+    });
+
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(newUserId);
+      throw new Error(profileError.message);
+    }
+
+    return authData.user;
+  }
+
+  throw new Error('მომხმარებლის შექმნა მოითხოვს Edge Function-ს ან ადმინისტრატორის კონფიგურაციას.');
 }
 
-export async function adminUpdateUser(userId: string, updates: any) {
-  if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized.");
-  
-  // Update auth if email or password changed
-  const authUpdates: any = {};
-  if (updates.email) authUpdates.email = updates.email;
-  if (updates.password) authUpdates.password = updates.password;
-  
-  if (Object.keys(authUpdates).length > 0) {
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
-    if (authError) throw new Error(authError.message);
+export async function adminUpdateUser(userId: string, updates: AdminUpdateUserData) {
+  // 1. Invoke Supabase Edge Function 'admin-users' first
+  try {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'update', userId, updates }
+    });
+    if (!error && (data?.success || data?.profile)) {
+      return true;
+    }
+    if (error) {
+      console.warn('Edge Function admin-users invocation failed, attempting local fallback:', error);
+    }
+  } catch (edgeErr) {
+    console.warn('Edge Function admin-users threw error, attempting local fallback:', edgeErr);
   }
-  
-  // Update profiles table
-  const profileUpdates: any = {};
-  if (updates.name) profileUpdates.name = updates.name;
-  if (updates.role) profileUpdates.role = updates.role;
-  if (updates.email) profileUpdates.email = updates.email; // keep in sync
-  
-  if (updates.role === 'TEACHER') {
-    profileUpdates.subject = updates.subject || null;
-    profileUpdates.phone = updates.phone || null;
-    profileUpdates.grade = null;
-  } else if (updates.role === 'STUDENT') {
-    profileUpdates.grade = updates.grade || null;
-    profileUpdates.subject = null;
-    profileUpdates.phone = null;
-  } else if (updates.role === 'ADMIN') {
-    profileUpdates.grade = null;
-    profileUpdates.subject = null;
-    profileUpdates.phone = null;
+
+  // 2. Safe fallback for local development if Edge Function is offline
+  if (isLocalAdminConfigured()) {
+    console.warn('Executing adminUpdateUser via local supabaseAdmin fallback');
+    const authUpdates: { email?: string; password?: string } = {};
+    if (updates.email) authUpdates.email = updates.email;
+    if (updates.password) authUpdates.password = updates.password;
+
+    if (Object.keys(authUpdates).length > 0) {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
+      if (authError) throw new Error(authError.message);
+    }
+
+    const profileUpdates: {
+      name?: string;
+      role?: string;
+      email?: string;
+      subject?: string | null;
+      phone?: string | null;
+      grade?: string | null;
+    } = {};
+    if (updates.name) profileUpdates.name = updates.name;
+    if (updates.role) profileUpdates.role = updates.role;
+    if (updates.email) profileUpdates.email = updates.email;
+
+    if (updates.role === 'TEACHER') {
+      profileUpdates.subject = updates.subject || null;
+      profileUpdates.phone = updates.phone || null;
+      profileUpdates.grade = null;
+    } else if (updates.role === 'STUDENT') {
+      profileUpdates.grade = updates.grade || null;
+      profileUpdates.subject = null;
+      profileUpdates.phone = null;
+    } else if (updates.role === 'ADMIN') {
+      profileUpdates.grade = null;
+      profileUpdates.subject = null;
+      profileUpdates.phone = null;
+    }
+
+    if (Object.keys(profileUpdates).length > 0) {
+      const { error: profileError } = await supabaseAdmin.from('profiles').update(profileUpdates).eq('id', userId);
+      if (profileError) throw new Error(profileError.message);
+    }
+
+    return true;
   }
-  
-  if (Object.keys(profileUpdates).length > 0) {
-    const { error: profileError } = await supabaseAdmin.from('profiles').update(profileUpdates).eq('id', userId);
-    if (profileError) throw new Error(profileError.message);
-  }
-  
-  return true;
+
+  throw new Error('მომხმარებლის განახლება მოითხოვს Edge Function-ს ან ადმინისტრატორის კონფიგურაციას.');
 }
 
 export async function deleteWhitelistUser(userId: string) {
-  if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized.");
-  
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-  if (error) throw new Error(error.message);
-  return true;
+  // 1. Invoke Supabase Edge Function 'admin-users' first
+  try {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'delete', userId }
+    });
+    if (!error && data?.success) {
+      return true;
+    }
+    if (error) {
+      console.warn('Edge Function admin-users invocation failed, attempting local fallback:', error);
+    }
+  } catch (edgeErr) {
+    console.warn('Edge Function admin-users threw error, attempting local fallback:', edgeErr);
+  }
+
+  // 2. Safe fallback for local development if Edge Function is offline
+  if (isLocalAdminConfigured()) {
+    console.warn('Executing deleteWhitelistUser via local supabaseAdmin fallback');
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  throw new Error('მომხმარებლის წაშლა მოითხოვს Edge Function-ს ან ადმინისტრატორის კონფიგურაციას.');
 }
 
 export async function getWhitelist() {
@@ -498,12 +783,32 @@ export async function getWhitelist() {
   return { teachers, students };
 }
 
-export async function updateProfile(userId: string, email: string, updates: any, currentPassword?: string) {
-  const payload: any = {};
-  if (updates.name) payload.name = updates.name;
-  if (updates.subject) payload.subject = updates.subject;
-  if (updates.phone) payload.phone = updates.phone;
-  if (updates.grade) payload.grade = updates.grade;
+export async function updateProfile(userId: string, email: string, updates: UpdateProfileUpdates, currentPassword?: string) {
+  const payload: {
+    name?: string;
+    subject?: string | null;
+    phone?: string | null;
+    grade?: string | null;
+  } = {};
+  if (updates.name !== undefined) {
+    if (typeof updates.name === 'string') {
+      const trimmed = updates.name.trim();
+      if (trimmed.length > 0) {
+        payload.name = trimmed;
+      }
+    } else if (updates.name) {
+      payload.name = updates.name;
+    }
+  }
+  if (updates.subject !== undefined) {
+    payload.subject = updates.subject ? (typeof updates.subject === 'string' ? updates.subject.trim() : updates.subject) : null;
+  }
+  if (updates.phone !== undefined) {
+    payload.phone = updates.phone ? (typeof updates.phone === 'string' ? updates.phone.trim() : updates.phone) : null;
+  }
+  if (updates.grade !== undefined) {
+    payload.grade = updates.grade ? (typeof updates.grade === 'string' ? updates.grade.trim() : updates.grade) : null;
+  }
   
   if (Object.keys(payload).length > 0) {
     const { error } = await supabase.from('profiles').update(payload).eq('id', userId);
