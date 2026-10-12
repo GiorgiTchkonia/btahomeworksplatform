@@ -1,227 +1,169 @@
-# BTA Homeworks — საშინაო დავალებების პორტალი
+# 🎓 BTA Homeworks — საშინაო დავალებების პორტალი
 
-> ბიზნესისა და ტექნოლოგიების აკადემიის (BTA) საშინაო დავალებების მართვის, ჩაბარებისა და შეფასების ერთიანი თანამედროვე პლატფორმა.
+> **ბიზნესისა და ტექნოლოგიების აკადემიის (BTA)** სასწავლო პროცესის, საშინაო დავალებების ჩაბარებისა და შეფასების თანამედროვე, მარტივი და დაცული ციფრული პლატფორმა.
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.4-646cff.svg)](https://vitejs.dev/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38bdf8.svg)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%7C%20DB%20%7C%20Storage-3ecf8e.svg)](https://supabase.com/)
+[![React](https://img.shields.io/badge/Frontend-React%2018.3-61dafb.svg)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript%205.6-3178c6.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Build-Vite%205.4-646cff.svg)](https://vitejs.dev/)
+[![TailwindCSS](https://img.shields.io/badge/Styling-Tailwind%20CSS%203.4-38bdf8.svg)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Backend%20%26%20DB-Supabase%20PostgreSQL-3ecf8e.svg)](https://supabase.com/)
+[![Vercel](https://img.shields.io/badge/Hosting-Vercel-000000.svg)](https://vercel.com/)
 [![Tests](https://img.shields.io/badge/Tests-141%2F141%20Passing-brightgreen.svg)]()
 
 ---
 
-## 📋 სარჩევი (Table of Contents)
-1. [პროექტის მიმოხილვა (Overview)](#-პროექტის-მიმოხილვა-overview)
-2. [ტექნოლოგიური სტეკი (Tech Stack)](#-ტექნოლოგიური-სტეკი-tech-stack)
-3. [არქიტექტურა და როლები (Architecture & Roles)](#-არქიტექტურა-და-როლები-architecture--roles)
-4. [უსაფრთხოების მოდელი (Security Posture)](#-უსაფრთხოების-მოდელი-security-posture)
-5. [გარემოს ცვლადები (Environment Variables)](#-გარემოს-ცვლადები-environment-variables)
-6. [მონაცემთა ბაზა და მიგრაციები (Database & Migrations)](#-მონაცემთა-ბაზა-და-მიგრაციები-database--migrations)
-7. [ინსტალაცია და გაშვება (Getting Started)](#-ინსტალაცია-და-გაშვება-getting-started)
-8. [ტესტირება და ხარისხის კონტროლი (Testing & QA)](#-ტესტირება-და-ხარისხის-კონტროლი-testing--qa)
-9. [ოპტიმიზაცია და Performance (Performance & Optimization)](#-ოპტიმიზაცია-და-performance-performance--optimization)
-10. [დეპლოი (Deployment)](#-დეპლოი-deployment)
+## 💡 საიტის მთავარი აზრი და ფილოსოფია
+
+**BTA Homeworks**-ის შექმნის მთავარი იდეა არის **სიმარტივე, სისწრაფე და სასწავლო პროცესის გამჭვირვალობა**.
+
+ბევრი სასწავლო პლატფორმა გადატვირთულია რთული მენიუებითა და გაუგებარი ფუნქციებით, რაც ართულებს როგორც მოსწავლის, ისე მასწავლებლის ყოველდღიურ მუშაობას. ამ პორტალის მიზანია:
+
+1. **მაქსიმალური სიმარტივე (Simplicity First):** მომხმარებელი შესვლისთანავე ხვდება პირდაპირ თავის სამუშაო დაფაზე (Dashboard) და ზედმეტი ნაბიჯების გარეშე, 1–2 კლიკით ასრულებს მთავარ მოქმედებას — ნახულობს დავალებას, ტვირთავს ნაშრომს ან აფასებს სტუდენტს.
+2. **ყველაფერი ერთ სივრცეში:** მიმოფანტული ჩატების, მეილებისა და სხვადასხვა ბმულების ნაცვლად, ყველა საგანი, დავალების პირობა, მიმაგრებული მასალა, დედლაინი, ჩაბარებული ფაილი, Google Drive/Docs ბმული, ქულა (1–10) და მასწავლებლის კომენტარი თავმოყრილია ერთ სუფთა და მოწესრიგებულ გარემოში.
+3. **მკაფიო ვიზუალური სტატუსები:** ფერებითა და ბეიჯებით მოსწავლეც და მასწავლებელიც მყისიერად ხედავს, რომელი დავალებაა ჩასაბარებელი, რომელია მოლოდინში (`SUBMITTED`), რომელი დადასტურდა (`APPROVED`) და რომელი საჭიროებს ჩასწორებას (`DECLINED`).
+4. **დახურული და უსაფრთხო აკადემიური სივრცე:** საიტი მუშაობს **Whitelist (თეთრი სიის)** პრინციპით — სისტემაში ხვდებიან მხოლოდ ადმინისტრაციის მიერ დამატებული რეალური მოსწავლეები და მასწავლებლები.
+5. **კომფორტი ნებისმიერ მოწყობილობაზე:** საიტი სრულად ადაპტირებულია როგორც კომპიუტერისთვის, ისე მობილურისთვის (მოსწავლეს შეუძლია ტელეფონით პირდაპირ გადაუღოს ფოტო რვეულს და ატვირთოს) და აქვს სრულყოფილი **Light / Dark Mode** მხარდაჭერა.
 
 ---
 
-## 🎯 პროექტის მიმოხილვა (Overview)
+## 🛠️ ტექნოლოგიური სტეკი (რას იყენებს პროექტი)
 
-**BTA Homeworks** შექმნილია სასწავლო პროცესის სრული ციფრული ტრანსფორმაციისთვის. პლატფორმა აერთიანებს სტუდენტებს, პედაგოგებსა და ადმინისტრაციას ერთ ეკოსისტემაში, უზრუნველყოფს საშინაო დავალებების ჩაბარებას, შეფასებას, ანალიტიკასა და მომხმარებელთა მართვას მაქსიმალური უსაფრთხოებისა და აკადემიური ეთიკის სტანდარტების დაცვით.
+პროექტი აგებულია თანამედროვე, სწრაფ და უსაფრთხო **Full-Stack Serverless** არქიტექტურაზე:
 
----
-
-## 🛠️ ტექნოლოგიური სტეკი (Tech Stack)
-
-### Frontend
-- **React 18.3** — კომპონენტური UI არქიტექტურა
-- **TypeScript 5.5** — მკაცრი ტიპიზაცია (`strict: true`, zero `any`)
-- **Vite 5.4** — მაღალსიჩქარიანი ასამბლერი და HMR
-- **Tailwind CSS 3.4** — დიზაინ-სისტემა სრული Dark Mode მხარდაჭერით
-- **Wouter** — ულტრამსუბუქი მარშრუტიზაცია როლებზე დაფუძნებული `<ProtectedRoute>` დაცვით
-- **Lucide React** — თანამედროვე ვექტორული იკონოგრაფია
-
-### Backend & Cloud
-- **Supabase PostgreSQL** — რელაციური ბაზა Row-Level Security (RLS) პოლიტიკებით
-- **Supabase Auth** — JWT სესიები, დაცული ავთენტიფიკაცია და პაროლის აღდგენის ნაკადი
-- **Supabase Storage** — დაცული ფაილური საცავი Signed URL-ებით
-- **Supabase Edge Functions (Deno)** — ადმინისტრაციული პრივილეგირებული ფუნქციები (`admin-users`)
-- **Vercel** — Production ჰოსტინგი Enterprise HTTP უსაფრთხოების ჰედერებით
+### 🎨 1. Frontend (კლიენტის მხარე და ფრეიმვორკები)
+| ტექნოლოგია | ვერსია | დანიშნულება პროექტში |
+|---|---|---|
+| **React** | `18.3.1` | მთავარი UI ბიბლიოთეკა/ფრეიმვორკი კომპონენტური არქიტექტურისთვის (`Hooks`, `Context API`, `React.lazy`, `Suspense`). |
+| **TypeScript** | `5.6.3` | მკაცრი სტატიკური ტიპიზაცია (`strict: true`, zero `any`), რაც გამორიცხავს ტიპურ შეცდომებს კოდში. |
+| **Vite** | `5.4.11` | ულტრასწრაფი ბილდ-ინსტრუმენტი, დეველოპმენტ სერვერი (HMR) და Route-level Code Splitting. |
+| **Tailwind CSS** | `3.4.14` | Utility-first CSS ფრეიმვორკი თანამედროვე დიზაინის, რესპონსიულობისა და Dark/Light თემებისთვის (`PostCSS` + `Autoprefixer`). |
+| **Wouter** | `3.3.5` | მსუბუქი და სწრაფი როუტერი SPA ნავიგაციისთვის და როლებზე დაფუძნებული `<ProtectedRoute>` დაცვისთვის. |
+| **Lucide React** | `0.453.0` | თანამედროვე, სუფთა ვექტორული ხატულების (Icons) ნაკრები. |
+| **Browser Image Compression** | `2.0.2` | სურათების ავტომატური კომპრესია ბრაუზერშივე ატვირთვამდე (ზოგავს ინტერნეტ-ტრაფიკს და აჩქარებს ატვირთვას). |
+| **clsx & tailwind-merge** | `2.1` / `2.5` | დინამიკური და პირობითი Tailwind კლასების სუფთა მართვა. |
+| **Google Fonts** | `Noto Sans Georgian`, `DM Sans` | ქართული და ლათინური ტექსტის სუფთა და კითხვადი ტიპოგრაფია. |
 
 ---
 
-## 👥 არქიტექტურა და როლები (Architecture & Roles)
+### ⚙️ 2. Backend (სერვერული ლოგიკა და API)
+პროექტი Backend-ისთვის იყენებს **Supabase (Backend-as-a-Service)** ეკოსისტემას:
 
-### 1. მოსწავლე (Student)
-- საგნების მიხედვით პროგრესის დინამიკური თვალყურის დევნება (დასრულებული, მოლოდინში, გასასწორებელი).
-- დავალებების ჩაბარება ფაილის ატვირთვით (PDF, DOCX, XLSX, PPTX, WebP/JPG/PNG, ZIP, RAR) ან Google Drive/Docs დამოწმებული ბმულით.
-- ჩაბარებული ნაშრომის რედაქტირება/გაუქმება ვადის ამოწურვამდე (ძველი ფაილების ავტომატური წაშლით).
-- მასწავლებლის შეფასების (ქულა 1–10) და დეტალური კომენტარების ნახვა.
-
-### 2. მასწავლებელი (Teacher)
-- საგნებისა და დავალებების სრული მართვა (შექმნა, რედაქტირება, წაშლა).
-- დაშვებული ფაილის ფორმატების (`allowedFormats`) და ვადების (`dueDate`) დაწესება.
-- სტუდენტთა ნაშრომების რეესტრი: ძებნა სტუდენტის სახელით და ფილტრაცია სტატუსების მიხედვით (`ALL`, `SUBMITTED`, `APPROVED`, `DECLINED`, `UNSUBMITTED`).
-- ნაშრომის შემოწმება: დამტკიცება (`APPROVED`) ან ცვლილებების მოთხოვნა (`DECLINED`), 1–10 ქულიანი შეფასება და პერსონალური რეცენზია.
-
-### 3. ადმინისტრატორი (Admin)
-- მომხმარებელთა თეთრი სიის (Whitelist) სრული მართვა.
-- მომხმარებლების შექმნა, რედაქტირება და წაშლა Supabase Edge Function-ის მეშვეობით.
-- როლების (`STUDENT`, `TEACHER`, `ADMIN`), კლასების/ჯგუფებისა და საგნების მინიჭება.
-
-### 4. საჯარო და სამართლებრივი გვერდები
-- **დოკუმენტაცია (`/`)** — პლატფორმის შესაძლებლობების ინტერაქტიული გაცნობა.
-- **კონფიდენციალურობის პოლიტიკა (`/privacy`)** — საქართველოს „პერსონალურ მონაცემთა დაცვის შესახებ" კანონთან სრულად შესაბამისი დოკუმენტი.
-- **გამოყენების წესები (`/terms`)** — აკადემიური კეთილსინდისიერების, პლაგიატის აკრძალვისა და მომხმარებელთა უფლება-მოვალეობების რეგლამენტი.
+- **Supabase Client SDK (`@supabase/supabase-js v2.116.0`):** უზრუნველყოფს კლიენტსა და სერვერს შორის პარალელურ (`Promise.all`) და დაცულ კომუნიკაციას.
+- **Supabase Edge Functions (Deno Runtime + TypeScript):**
+  - მდებარეობა: `supabase/functions/admin-users/index.ts`
+  - დანიშნულება: ასრულებს პრივილეგირებულ ადმინისტრაციულ ოპერაციებს (მომხმარებლის შექმნა, რედაქტირება, პაროლის შეცვლა, წაშლა) სერვერის მხარეს. ამოწმებს გამომძახებლის JWT ტოკენს და `ADMIN` როლს, რათა `service_role` გასაღები არასდროს მოხვდეს ბრაუზერში.
+- **Supabase Auth (GoTrue):**
+  - ელფოსტითა და პაროლით ავტორიზაცია.
+  - JWT სესიების ავტომატური განახლება.
+  - პაროლის აღდგენის სისტემა (`resetPasswordForEmail`).
+- **Supabase Storage (`homework-files` bucket):**
+  - დაცული (Private) ფაილური საცავი მოსწავლეების ნაშრომებისა და მასწავლებლის მასალებისთვის.
+  - ფაილები ინახება იზოლირებულად: `{studentId}/{uuid}.{ext}`.
+  - ფაილების გასახსნელად გამოიყენება დროებითი დაცული ბმულები (`createSignedUrl` — 1-საათიანი ვალიდურობით).
+  - მოწმდება როგორც ფაილის გაფართოება, ისე რეალური MIME ტიპი და მასწავლებლის მიერ დაშვებული ფორმატები (`allowedFormats`).
 
 ---
 
-## 🔐 უსაფრთხოების მოდელი (Security Posture)
+### 🗄️ 3. მონაცემთა ბაზა (Database — PostgreSQL)
+მონაცემთა ბაზისთვის გამოიყენება **PostgreSQL** (Supabase-ის მართვადი Postgres ბაზა), რომელიც მოიცავს 4 ძირითად ცხრილს და სერვერულ დაცვას:
 
-1. **Row-Level Security (RLS):**
-   - ყველა ცხრილზე (`profiles`, `assignments`, `subjects`, `submissions`) ჩართულია RLS.
-   - ანონიმურ მომხმარებელს არ აქვს წვდომა პროფილებზე, დავალებებსა და ჩაბარებებზე.
-   - პედაგოგებს აქვთ მხოლოდ `SELECT` და `UPDATE (status, teacher_feedback, grade, reviewed_at)` უფლება შესაბამის საგნებში.
+1. **`public.profiles`** — მომხმარებელთა პროფილები (`id`, `role` [`ADMIN` | `TEACHER` | `STUDENT`], `name`, `email`, `grade`, `subject`, `phone`).
+2. **`public.subjects`** — სასწავლო საგნები (`id`, `name`, `color`, `icon`, `teacher_id`).
+3. **`public.assignments`** — მასწავლებლის მიერ შექმნილი დავალებები (`id`, `subject_id`, `teacher_id`, `title`, `description`, `due_date`, `attachment_url`, `allowed_formats`).
+4. **`public.submissions`** — მოსწავლეების მიერ ჩაბარებული ნაშრომები (`id`, `assignment_id`, `student_id`, `file_url`, `submission_link`, `student_comment`, `status`, `grade` [1–10], `teacher_feedback`, `submitted_at`, `reviewed_at`).
 
-2. **მონაცემთა ბაზის ტრიგერები (Anti-Privilege Escalation):**
-   - `BEFORE UPDATE ON profiles` ტრიგერი კრძალავს `role`-ის ან `email`-ის შეცვლას თვითნებურად მომხმარებლის მიერ (ხელმისაწვდომია მხოლოდ ADMIN როლისთვის).
-   - `BEFORE INSERT/UPDATE ON submissions` ტრიგერი უზრუნველყოფს, რომ სტუდენტის მიერ ჩაბარებისას სტატუსი ყოველთვის იყოს `SUBMITTED`, `grade` და `teacher_feedback` იყოს `NULL`, სტუდენტის სახელი ამოიკითხოს ბაზიდან და ვადაგასული დავალება არ მიიღოს სერვერმა.
-
-3. **Service Role Key იზოლაცია:**
-   - კლიენტურ აპლიკაციაში არ გამოიყენება Service Role Key.
-   - ადმინისტრაციული ქმედებები დელეგირებულია Supabase Edge Function-ზე (`supabase/functions/admin-users`), რომელიც ამოწმებს გამომძახებლის JWT ტოკენსა და `ADMIN` როლს.
-
-4. **ფაილების საცავის დაცვა (Storage Isolation):**
-   - Bucket არის `private`. ფაილების სანახავად გენერირდება დროებითი დაცული Signed URL (`createSignedUrl`, 1 საათიანი ვალიდურობით).
-   - ფაილები ინახება სტრუქტურით `{studentId}/{uuid}.{ext}`.
-   - რეალიზებულია გაფართოებისა და რეალური MIME ტიპის ორმაგი ვალიდაცია (იკრძალება `.exe`, `.sh`, `.py`, `.bat`, `.js` და ა.შ.).
-   - ჩაბარების გაუქმებისას ან ხელახალი ატვირთვისას ძველი ფაილი ავტომატურად იშლება საცავიდან.
-
-5. **Stored XSS პრევენცია:**
-   - ბმულის ველში იკრძალება `javascript:` და არასანდო პროტოკოლები.
-   - მოწმდება `protocol === 'https:'` და ჰოსტნეიმის ზუსტი შესაბამისობა (`drive.google.com`, `docs.google.com`) როგორც კლიენტზე, ისე ბაზის `CHECK` შეზღუდვით.
-
-6. **HTTP Security Headers (`vercel.json`):**
-   - `Content-Security-Policy` (CSP)
-   - `X-Frame-Options: DENY`
-   - `X-Content-Type-Options: nosniff`
-   - `Referrer-Policy: strict-origin-when-cross-origin`
-   - `Permissions-Policy`
+**ბაზის დონეზე ჩაშენებული დაცვა და ოპტიმიზაცია (`supabase/migrations/`):**
+- **Row-Level Security (RLS):** თითოეულ ცხრილს აქვს მკაცრი წვდომის პოლიტიკა — არაავტორიზებულ (`anon`) მომხმარებელს ბაზასთან წვდომა არ აქვს; მოსწავლე ხედავს მხოლოდ საკუთარ ჩაბარებებს; მასწავლებელი აფასებს მხოლოდ საკუთარი საგნის დავალებებს.
+- **PostgreSQL Triggers (PL/pgSQL):**
+  - `trg_prevent_unauthorized_profile_updates`: ბლოკავს არა-ადმინის მიერ საკუთარი `role`-ის ან `email`-ის შეცვლას.
+  - `trg_enforce_submission_rules`: სერვერულად ამოწმებს დავალების ჩაბარების ვადას (`now() > due_date`), ავტომატურად სვამს სტატუსს `SUBMITTED` და იცავს მოსწავლის ნაშრომსა და მასწავლებლის შეფასებას არასანქცირებული ცვლილებისგან.
+- **CHECK Constraints:** ბაზის დონეზე ამოწმებს, რომ ქულა (`grade`) იყოს 1-დან 10-მდე, ხოლო ბმული (`submission_link`) იწყებოდეს მხოლოდ `https://drive.google.com/` ან `https://docs.google.com/`-ით (Stored XSS-ის პრევენცია).
+- **B-Tree Indexes:** დამატებულია ინდექსები (`idx_submissions_student_id`, `idx_submissions_assignment_id`, `idx_assignments_subject_id`, `idx_assignments_teacher_id`) სწრაფი მუშაობისთვის.
 
 ---
 
-## ⚙️ გარემოს ცვლადები (Environment Variables)
+### ☁️ 4. ჰოსტინგი, უსაფრთხოება და ტესტირება (DevOps & QA)
+- **Vercel:** ფრონტენდის Production ჰოსტინგი GitHub-თან ავტომატური CI/CD ინტეგრაციით.
+- **HTTP Security Headers (`vercel.json`):** კონფიგურირებულია `Content-Security-Policy` (CSP), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` და `Permissions-Policy`.
+- **ავტომატური E2E ტესტები (`tests/run-all.cjs`):** 4-დონიანი სატესტო სისტემა (23 სატესტო ნაკრები, **141 ავტომატური ტესტი**), რომელიც ამოწმებს უსაფრთხოებას, სასაზღვრო შემთხვევებს, UI კონტრასტს და სამივე როლის სრულ სცენარებს.
 
-პროექტის ძირში შექმენით `.env` ფაილი შემდეგი ცვლადებით:
+---
 
-```env
-# Supabase პროექტის URL
-VITE_SUPABASE_URL=https://your-project.supabase.co
+## 👥 სამი როლის შესაძლებლობები
 
-# Supabase საჯარო Anon Key (უსაფრთხოა ბრაუზერისთვის)
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+### 👨‍🎓 მოსწავლე (Student)
+- ხედავს ყველა საგანს და თითოეულ საგანში საკუთარ პროგრესს.
+- აბარებს დავალებას ფაილით (`PDF`, `DOCX`, `XLSX`, `PPTX`, `JPG/PNG/WebP`, `ZIP/RAR`) ან Google Drive / Google Docs ბმულით.
+- ვადის ამოწურვამდე შეუძლია ჩაბარებული დავალების განახლება ან გაუქმება (ძველი ფაილი საცავიდან ავტომატურად იშლება).
+- ხედავს მასწავლებლის მიერ დაწერილ ქულას (`X/10`) და დეტალურ კომენტარს.
 
-# (სურვილისამებრ - მხოლოდ ლოკალური დეველოპმენტისთვის Edge Function-ის გარეშე)
-# არასოდეს დააკომიტოთ და არ დაამატოთ Vercel Production გარემოში!
-# VITE_SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+### 👨‍🏫 მასწავლებელი (Teacher)
+- ქმნის, არედაქტირებს და შლის დავალებებს თავის საგნებში.
+- უთითებს დედლაინს, სასწავლო მასალას და დაშვებულ ფაილის ფორმატებს (`allowedFormats`).
+- ფილტრავს და ეძებს სტუდენტების ნაშრომებს სახელითა და სტატუსით (`ყველა`, `ჩაბარებული`, `დადასტურებული`, `უარყოფილი`, `ჩაუბარებელი`).
+- აფასებს ნაშრომს **1–10 ქულიანი სისტემით**, უწერს ინდივიდუალურ კომენტარს და ადასტურებს ან უბრუნებს გადასაკეთებლად.
+
+### 🛡️ ადმინისტრატორი (Admin)
+- მართავს აკადემიის საგნებს და აბამს შესაბამის მასწავლებლებს.
+- მართავს მომხმარებელთა თეთრ სიას (**Whitelist**) — ამატებს, არედაქტირებს და შლის მოსწავლეებს, მასწავლებლებსა და ადმინისტრატორებს.
+- აკონტროლებს პლატფორმის სრულ სტატისტიკას.
+
+---
+
+## 📂 პროექტის სტრუქტურა
+
+```text
+btahomeworks/
+├── src/
+│   ├── components/          # საერთო კომპონენტები (Navbar, Footer, ProtectedRoute, ProfileModal, DateTimePicker...)
+│   ├── context/             # თემის (Light/Dark/System) და დიალოგების პროვაიდერები
+│   ├── lib/
+│   │   ├── api.ts           # მთავარი API ფუნქციები, ფაილების და URL-ების ვალიდაცია
+│   │   ├── supabase.ts      # Supabase-ის მთავარი კლიენტი (Singleton)
+│   │   └── supabase-admin.ts# ლოკალური დეველოპმენტის ფოლბექ კლიენტი
+│   ├── pages_view/          # გვერდები (Login, Student, Teacher, Admin, Whitelist, Documentation, Privacy, Terms)
+│   ├── types/               # მკაცრი TypeScript ინტერფეისები და ტიპები
+│   ├── App.tsx              # როუტინგი (React.lazy + Suspense) და სესიის მართვა
+│   └── main.tsx             # აპლიკაციის საწყისი წერტილი
+├── supabase/
+│   ├── functions/
+│   │   └── admin-users/     # Deno Edge Function ადმინის ოპერაციებისთვის
+│   └── migrations/          # კონსოლიდირებული PostgreSQL სქემა, RLS და ტრიგერები
+├── tests/                   # 141 ავტომატური ტესტი (Tier 1–4)
+├── index.html               # საწყისი HTML, SEO მეტა-თეგები და FOUC-ის საწინააღმდეგო სკრიპტი
+├── vercel.json              # Vercel-ის კონფიგურაცია და HTTP Security Headers
+└── vite.config.ts           # Vite-ის კონფიგურაცია
 ```
 
 ---
 
-## 🗄️ მონაცემთა ბაზა და მიგრაციები (Database & Migrations)
+## 🚀 ლოკალურად გაშვება
 
-მიგრაციის SQL სკრიპტები განთავსებულია საქაღალდეში `supabase/migrations/`:
-- `supabase/migrations/20261011000000_consolidated_schema.sql` — სრული კონსოლიდირებული სქემა, RLS პოლიტიკები, ინდექსები (`submissions(student_id)`, `assignments(subject_id)`, `assignments(teacher_id)`) და ტრიგერები.
+1. **დამოკიდებულებების დაყენება:**
+   ```bash
+   npm install
+   ```
 
-მიგრაციების გასაშვებად გამოიყენეთ Supabase CLI:
-```bash
-supabase db push
-```
-ან ჩასვით SQL სკრიპტი თქვენი Supabase Dashboard-ის SQL Editor-ში.
+2. **`.env` ფაილის კონფიგურაცია:**
+   ```env
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-public-anon-key
+   ```
 
-Edge Function-ის დეპლოისთვის:
-```bash
-supabase functions deploy admin-users
-```
+3. **დეველოპმენტ სერვერის ჩართვა:**
+   ```bash
+   npm run dev
+   ```
+   საიტი გაიხსნება მისამართზე: `http://localhost:3000/`
 
----
-
-## 🚀 ინსტალაცია და გაშვება (Getting Started)
-
-### წინაპირობები
-- Node.js >= 18.x
-- npm >= 9.x
-
-### 1. რეპოზიტორიის კლონირება და დამოკიდებულებების დაყენება
-```bash
-git clone https://github.com/your-username/btahomeworks.git
-cd btahomeworks
-npm install
-```
-
-### 2. დეველოპმენტ სერვერის გაშვება
-```bash
-npm run dev
-```
-აპლიკაცია გაეშვება მისამართზე: `http://localhost:5173/`
-
-### 3. Production ბილდი
-```bash
-npm run build
-```
-ბილდის შედეგი განთავსდება `dist/` საქაღალდეში.
+4. **ტესტებისა და ბილდის შემოწმება:**
+   ```bash
+   node tests/run-all.cjs
+   npx tsc --noEmit
+   npm run build
+   ```
 
 ---
 
-## 🧪 ტესტირება და ხარისხის კონტროლი (Testing & QA)
-
-პროექტი აღჭურვილია 4-დონიანი (Tier 1–4) ავტომატიზებული ტესტირების სისტემით, რომელიც მოიცავს 23 სატესტო ნაკრებსა და 141 დამოუკიდებელ ტესტს:
-
-- **Tier 1 (Feature Coverage):** ფუნქციონალის ვალიდაცია (Edge Function, RLS, XSS, ფაილების ვალიდაცია, პაროლის აღდგენა, თემები, სამართლებრივი გვერდები, მასწავლებლის შეფასება და რედაქტირება).
-- **Tier 2 (Boundary & Corner Cases):** სასაზღვრო შემთხვევები (ფაილის ზომები, არასწორი ბმულები, ვადის ამოწურვა, 1–10 ქულის დიაპაზონი, CSS კონტრასტი).
-- **Tier 3 (Cross-Feature Combinations):** მრავალკომპონენტიანი ურთიერთქმედება (RLS + ტრიგერები, ატვირთვა + ფაილის წაშლის სასიცოცხლო ციკლი).
-- **Tier 4 (Real-World Scenarios):** მომხმარებელთა როლების E2E ნაკადები (სტუდენტის, მასწავლებლისა და ადმინისტრატორის სრული სცენარები, შეღწევადობისა და ჰაკერული შეტევების სიმულაცია).
-
-### ტესტების გაშვება:
-```bash
-# სრული ავტომატიზებული სატესტო ნაკრების გაშვება (141/141 ტესტი)
-node tests/run-all.cjs
-
-# TypeScript ტიპების შემოწმება (Zero errors)
-npx tsc --noEmit
-```
-
----
-
-## ⚡ ოპტიმიზაცია და Performance (Performance & Optimization)
-
-1. **Route-Level Code Splitting:**
-   - ყველა გვერდი (`LoginPage`, `StudentDashboardPage`, `TeacherDashboardPage`, `AdminDashboardPage`, `WhitelistPage`, `DocumentationPage`, `PrivacyPolicyPage`, `TermsPage`) იმპორტირებულია `React.lazy()`-ით.
-   - საწყისი JavaScript ჩანქი შემცირებულია 678KB-დან ~440KB-მდე, რაც უზრუნველყოფს მყისიერ პირველად ჩატვირთვას.
-   - გვერდების გადასვლაზე რეალიზებულია თანამედროვე Skeleton ანიმაცია (`<Suspense>`).
-
-2. **დინამიური ბიბლიოთეკების იმპორტი:**
-   - სურათების კომპრესიის ბიბლიოთეკა `browser-image-compression` (~53KB) ჩაიტვირთება მხოლოდ სურათის ატვირთვის პროცესში დინამიური `import()`-ით.
-
-3. **მონაცემთა მოთხოვნების პარალელიზაცია:**
-   - API ფუნქციებში (`getStudentDashboardData`, `getTeacherDashboardData`, `getAssignmentDetails`) თანმიმდევრული მოთხოვნები გაერთიანებულია `Promise.all()`-ში, რაც გამორიცხავს Waterfall შეყოვნებებს.
-
-4. **ფონტებისა და რენდერის ოპტიმიზაცია:**
-   - `Noto Sans Georgian` და `DM Sans` ფონტები იტვირთება პირდაპირ `index.html`-დან Google Fonts Preconnect-ით.
-   - CSS-დან ამოღებულია ბლოკირებადი `@import` დირექტივები.
-   - FOUC (Flash of Unstyled Content) თემის გადართვისას სრულად აღმოფხვრილია `<head>`-ში განთავსებული სინქრონული ინლაინ სკრიპტით.
-
----
-
-## 🌐 დეპლოი (Deployment)
-
-პროექტი ოპტიმიზებულია Vercel პლატფორმაზე გასაშვებად:
-1. შეაერთეთ Git რეპოზიტორია Vercel-თან.
-2. მიუთითეთ Framework Preset: `Vite`.
-3. დააკონფიგურირეთ Environment Variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-4. დეპლოი ავტომატურად გააქტიურებს `vercel.json`-ში გაწერილ უსაფრთხოების ჰედერებსა და SPA Rewrite წესებს.
-
----
-
-## 📄 ლიცენზია და საავტორო უფლებები
-© 2026 ბიზნესისა და ტექნოლოგიების აკადემია (BTA). ყველა უფლება დაცულია.
+## 📄 ლიცენზია
+© 2026 **ბიზნესისა და ტექნოლოგიების აკადემია (BTA)**. ყველა უფლება დაცულია.
