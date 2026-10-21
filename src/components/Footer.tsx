@@ -18,7 +18,7 @@ export default function Footer() {
             <div className="flex items-center gap-3">
               <BtaLogo size={38} />
               <div>
-                <div className="text-[15px] font-bold tracking-tight leading-none">BTA<span className="text-[#2B4EFF]">.</span></div>
+                <div className="text-[21px] font-extrabold tracking-tight leading-none">BTA</div>
                 <div className="text-[11px] text-gray-500 dark:text-slate-400 tracking-widest uppercase mt-1">სასწავლო პორტალი</div>
               </div>
             </div>

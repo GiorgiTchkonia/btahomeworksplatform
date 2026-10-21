@@ -54,9 +54,8 @@ export default function Navbar({ user, onLogout, onUserUpdated }: NavbarProps) {
             <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
               <BtaLogo size={36} />
               <div className="leading-none">
-                <span className="block text-[15px] font-bold text-gray-900 dark:text-white tracking-tight">
+                <span className="block text-[21px] font-extrabold text-gray-900 dark:text-white tracking-tight">
                   BTA
-                  <span className="text-[#2B4EFF]">.</span>
                 </span>
                 <span className="block text-[10px] text-gray-400 dark:text-slate-400 font-medium tracking-wider uppercase mt-0.5 hidden sm:block">
                   სასწავლო პორტალი
