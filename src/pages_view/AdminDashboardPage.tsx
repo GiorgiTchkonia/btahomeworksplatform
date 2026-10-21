@@ -1,4 +1,10 @@
+import { localizeError } from '@/lib/messages';
 import React, { useState, useEffect } from 'react';
+import GroupManager from '@/components/GroupManager';
+import CustomSelect from '@/components/ui/CustomSelect';
+import TeacherSubjectPicker from '@/components/TeacherSubjectPicker';
+import { CollegeGroup } from '@/types';
+import { getCollegeGroups, educationOptions, programmeLabel } from '@/lib/groups';
 import { useLocation } from 'wouter';
 import {
   Shield,
@@ -62,6 +68,9 @@ export default function AdminDashboardPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [groups, setGroups] = useState<CollegeGroup[]>([]);
+  const [studentGroup, setStudentGroup] = useState('');
+  const [teacherSubjects,setTeacherSubjects] = useState<string[]>([]);
 
   const loadData = async () => {
     try {
@@ -82,6 +91,7 @@ export default function AdminDashboardPage() {
       setCurrentUser(profile as SafeAdminUser);
 
       const data = await getAllUsersForAdmin();
+      setGroups(await getCollegeGroups());
       setTeachers(data.teachers as SafeTeacherUser[]);
       setStudents(data.students as SafeStudentUser[]);
       setAdmins(data.admins as SafeAdminUser[]);
@@ -123,6 +133,8 @@ export default function AdminDashboardPage() {
   });
 
   const handleOpenModal = (mode: 'ADD' | 'EDIT', user?: SafeUser) => {
+    setTeacherSubjects(mode==='EDIT'&&user?.role==='TEACHER' ? (user.teaching_subjects || (user.subject?[user.subject]:[])) : []);
+    setStudentGroup(mode === 'EDIT' && user?.role === 'STUDENT' ? user.group_id : '');
     setModalMode(mode);
     setErrorMsg('');
     if (mode === 'EDIT' && user) {
@@ -156,18 +168,20 @@ export default function AdminDashboardPage() {
     setIsSubmitting(true);
     setErrorMsg('');
     try {
+      if (formData.role === 'STUDENT' && !studentGroup) throw new Error('სტუდენტისთვის ჯგუფის არჩევა სავალდებულოა');
+      if (formData.role==='TEACHER'&&!teacherSubjects.length) throw new Error('დაამატეთ მასწავლებლის მინიმუმ ერთი საგანი');
       if (modalMode === 'ADD') {
-        if (!formData.password) {
-          throw new Error("პაროლი სავალდებულოა ახალი მომხმარებლისთვის");
-        }
-        await addWhitelistUser(formData);
+        const { password: _password, ...newUser } = formData;
+        await addWhitelistUser({ ...newUser, teaching_subjects: formData.role==='TEACHER'?teacherSubjects:null, group_id: formData.role === 'STUDENT' ? studentGroup : null });
       } else if (modalMode === 'EDIT' && editingUser) {
-        await adminUpdateUser(editingUser.id, formData);
+        await adminUpdateUser(editingUser.id, { ...formData, teaching_subjects: formData.role==='TEACHER'?teacherSubjects:null, group_id: formData.role === 'STUDENT' ? studentGroup : null });
       }
       await loadData();
       setIsModalOpen(false);
+      if (modalMode === 'ADD') showAlert('მოწვევა გაიგზავნა ელფოსტაზე. მომხმარებელი ბმულით დაადასტურებს მისამართს და დააყენებს პაროლს.', 'success');
+      else showAlert('მომხმარებლის მონაცემების ცვლილება დადასტურებულია.', 'success');
     } catch (err: any) {
-      setErrorMsg(err.message || 'დაფიქსირდა შეცდომა');
+      setErrorMsg(localizeError(err, 'დაფიქსირდა შეცდომა'));
     } finally {
       setIsSubmitting(false);
     }
@@ -182,8 +196,9 @@ export default function AdminDashboardPage() {
           setLoading(true);
           await deleteWhitelistUser(userId);
           await loadData();
+          showAlert('მომხმარებლის წაშლა დადასტურებულია.', 'success');
         } catch (err: any) {
-          showAlert("წაშლისას დაფიქსირდა შეცდომა: " + (err.message || "უცნობი შეცდომა"), 'error');
+          showAlert("წაშლისას დაფიქსირდა შეცდომა: " + (localizeError(err, "უცნობი შეცდომა")), 'error');
           setLoading(false);
         }
       }
@@ -220,6 +235,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-8 pb-12">
+      <GroupManager groups={groups} teachers={teachers} students={students} onSaved={loadData} />
       {/* Header Banner */}
       <div className="bg-white dark:bg-slate-800 rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
         {/* Subtle decorative background */}
@@ -285,7 +301,7 @@ export default function AdminDashboardPage() {
             <GraduationCap className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">მოსწავლეები</div>
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">სტუდენტები</div>
             <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5">{students.length}</div>
           </div>
         </div>
@@ -333,7 +349,7 @@ export default function AdminDashboardPage() {
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
-            მოსწავლეები ({students.length})
+            სტუდენტები ({students.length})
           </button>
         </div>
 
@@ -399,6 +415,9 @@ export default function AdminDashboardPage() {
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 dark:text-slate-100">{u.name}</div>
+                            <span className={`inline-block mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${u.account_status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'}`}>
+                              {u.account_status === 'ACTIVE' ? 'აქტიური' : u.account_status === 'PASSWORD_REQUIRED' ? 'პაროლი დასაყენებელია' : 'მოწვევის მოლოდინში'}
+                            </span>
                             <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                               <Mail className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                               <span>{u.email}</span>
@@ -423,7 +442,7 @@ export default function AdminDashboardPage() {
                         {isStudent && (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60">
                             <GraduationCap className="w-3.5 h-3.5" />
-                            მოსწავლე
+                            სტუდენტი
                           </span>
                         )}
                       </td>
@@ -445,7 +464,7 @@ export default function AdminDashboardPage() {
                         ) : student ? (
                           <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                             <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
-                            <span>კლასი: {student.grade || '-'}</span>
+                            <span>{student.grade || 'განათლება მითითებული არ არის'} · {groups.find(g => g.id === student.group_id)?.code || 'ჯგუფი'}</span>
                           </div>
                         ) : isAdmin ? (
                           <div className="text-xs text-slate-500 dark:text-slate-400 italic">
@@ -483,7 +502,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
       
-      {/* Note about admin key */}
+      {/* Explain when academic links prevent account deletion. */}
       <div className="bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl p-6 border border-amber-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center shrink-0">
@@ -492,7 +511,7 @@ export default function AdminDashboardPage() {
           <div>
             <div className="text-slate-900 dark:text-slate-100 font-bold text-sm">ყურადღება მომხმარებლების მართვაზე</div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              მომხმარებლების დასამატებლად / წასაშლელად საჭიროა <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-700 dark:text-slate-300">VITE_SUPABASE_SERVICE_ROLE_KEY</code> იყოს <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-700 dark:text-slate-300">.env</code> ფაილში.
+              მასწავლებლის წაშლამდე მისი საგნები და დავალებები სხვა მასწავლებელს უნდა გადაებაროს.
             </div>
           </div>
         </div>
@@ -523,7 +542,8 @@ export default function AdminDashboardPage() {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {errorMsg && (
-                <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-200">
+                <div role="alert" className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 text-sm rounded-xl border border-red-200 dark:border-red-800">
+                  <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
                   {errorMsg}
                 </div>
               )}
@@ -545,6 +565,8 @@ export default function AdminDashboardPage() {
                   <label htmlFor="admin-user-email" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ელ. ფოსტა</label>
                   <input
                     id="admin-user-email"
+                    readOnly={modalMode === 'EDIT'}
+                    aria-describedby="admin-email-help"
                     required
                     type="email"
                     value={formData.email}
@@ -553,9 +575,12 @@ export default function AdminDashboardPage() {
                   />
                 </div>
 
-                <div>
+                <p id="admin-email-help" className="text-sm text-slate-600 dark:text-slate-300">
+                  {modalMode === 'ADD' ? 'მიუთითეთ მოქმედი ელფოსტა. მოწვევის ბმულით მომხმარებელი თავად დააყენებს პაროლს.' : 'ელფოსტას მომხმარებელი საკუთარი პროფილიდან ცვლის და წერილით ადასტურებს.'}
+                </p>
+                {modalMode === 'EDIT' && <div>
                   <label htmlFor="admin-user-password" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    {modalMode === 'ADD' ? 'პაროლი' : 'ახალი პაროლი (დატოვეთ ცარიელი თუ არ ცვლით)'}
+                    ახალი პაროლი (დატოვეთ ცარიელი თუ არ ცვლით)
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
@@ -564,13 +589,13 @@ export default function AdminDashboardPage() {
                     <input
                       id="admin-user-password"
                       type="password"
-                      required={modalMode === 'ADD'}
+                      minLength={8}
                       value={formData.password}
                       onChange={(e) => setFormData({...formData, password: e.target.value})}
                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
                     />
                   </div>
-                </div>
+                </div>}
 
                 <div>
                   <label htmlFor="admin-user-role" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">როლი</label>
@@ -580,24 +605,16 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setFormData({...formData, role: e.target.value as Role})}
                     className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <option value="STUDENT">მოსწავლე (Student)</option>
-                    <option value="TEACHER">მასწავლებელი (Teacher)</option>
-                    <option value="ADMIN">ადმინისტრატორი (Administrator)</option>
+                    <option value="STUDENT">სტუდენტი </option>
+                    <option value="TEACHER">მასწავლებელი </option>
+                    <option value="ADMIN">ადმინისტრატორი </option>
                   </select>
                 </div>
 
                 {formData.role === 'TEACHER' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="admin-user-subject" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">საგანი</label>
-                      <input
-                        id="admin-user-subject"
-                        type="text"
-                        value={formData.subject}
-                        onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
-                      />
-                    </div>
+                    <div className="sm:col-span-2"><TeacherSubjectPicker value={teacherSubjects} onChange={setTeacherSubjects} /></div>
+
                     <div>
                       <label htmlFor="admin-user-phone" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ტელეფონი</label>
                       <input
@@ -613,14 +630,10 @@ export default function AdminDashboardPage() {
 
                 {formData.role === 'STUDENT' && (
                   <div>
-                    <label htmlFor="admin-user-grade" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">კლასი</label>
-                    <input
-                      id="admin-user-grade"
-                      type="text"
-                      value={formData.grade}
-                      onChange={(e) => setFormData({...formData, grade: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl outline-none transition-all text-slate-900 dark:text-slate-100"
-                    />
+                    <label htmlFor="admin-user-grade" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">სასკოლო განათლება / კლასი</label>
+                    <CustomSelect id="admin-user-grade" value={formData.grade} onChange={grade=>setFormData({...formData,grade})} options={[...new Set([...educationOptions,...(formData.grade?[formData.grade]:[])])].map(value=>({value,label:value}))} placeholder="აირჩიეთ სასკოლო განათლება" />
+                    <label htmlFor="admin-student-group" className="block text-sm font-semibold mt-4 mb-2">ჯგუფი *</label>
+                    <CustomSelect id="admin-student-group" searchable required value={studentGroup} onChange={setStudentGroup} placeholder="აირჩიეთ სტუდენტის ჯგუფი" options={groups.filter(g=>g.active||g.id===studentGroup).map(g=>({value:g.id,label:g.code,description:programmeLabel(g.programme_type)+(!g.active?' · არქივში':'')}))} />
                   </div>
                 )}
               </div>

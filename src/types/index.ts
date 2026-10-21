@@ -2,6 +2,8 @@ export type Role = 'TEACHER' | 'STUDENT' | 'ADMIN';
 export type UserRole = Role;
 
 export interface TeacherUser {
+  teaching_subjects?: string[];
+  account_status?: 'INVITED' | 'PASSWORD_REQUIRED' | 'ACTIVE';
   id: string;
   name: string;
   email: string;
@@ -11,6 +13,8 @@ export interface TeacherUser {
 }
 
 export interface StudentUser {
+  group_id: string;
+  account_status?: 'INVITED' | 'PASSWORD_REQUIRED' | 'ACTIVE';
   id: string;
   name: string;
   email: string;
@@ -19,6 +23,7 @@ export interface StudentUser {
 }
 
 export interface AdminUser {
+  account_status?: 'INVITED' | 'PASSWORD_REQUIRED' | 'ACTIVE';
   id: string;
   name: string;
   email: string;
@@ -42,6 +47,7 @@ export interface Subject {
 }
 
 export interface Assignment {
+  groupIds?: string[];
   id: string;
   subjectId: string;
   teacherId: string;
@@ -103,6 +109,7 @@ export interface StudentAssignmentWithStatus extends Assignment {
 }
 
 export interface CreateAssignmentParams {
+  groupIds: string[];
   subjectId: string;
   teacherId: string;
   title: string;
@@ -114,6 +121,8 @@ export interface CreateAssignmentParams {
 }
 
 export interface AddWhitelistUserData {
+  teaching_subjects?: string[] | null;
+  group_id?: string | null;
   email: string;
   password?: string;
   name: string;
@@ -124,6 +133,8 @@ export interface AddWhitelistUserData {
 }
 
 export interface AdminUpdateUserData {
+  teaching_subjects?: string[] | null;
+  group_id?: string | null;
   name?: string;
   role?: Role;
   email?: string;
@@ -134,11 +145,20 @@ export interface AdminUpdateUserData {
 }
 
 export interface UpdateProfileUpdates {
+  teaching_subjects?: string[];
   name?: string;
   subject?: string | null;
   phone?: string | null;
   grade?: string | null;
   email?: string;
   newPassword?: string;
+}
+
+export interface CollegeGroup {
+  id: string;
+  code: string;
+  programme_type: 'INTEGRATED' | 'NON_INTEGRATED';
+  programme_name: string;
+  active: boolean;
 }
 

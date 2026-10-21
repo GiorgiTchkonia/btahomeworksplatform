@@ -40,6 +40,10 @@ next-env.d.ts
 
 dist
 
+# Local CLI state and generated demo documents
+supabase/.temp/
+output/
+
 # Supabase sensitive data migrations
 supabase/data-migration.sql
 supabase_migration.sql

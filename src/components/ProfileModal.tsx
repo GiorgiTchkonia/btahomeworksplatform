@@ -1,3 +1,5 @@
+import { MIN_PASSWORD_LENGTH } from '@/lib/messages';
+import { localizeError } from '@/lib/messages';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -17,6 +19,9 @@ import {
 } from 'lucide-react';
 import { User, SafeUser, SafeTeacherUser, SafeStudentUser } from '@/types';
 import { updateProfile } from '@/lib/api';
+import CustomSelect from './ui/CustomSelect';
+import TeacherSubjectPicker from './TeacherSubjectPicker';
+import { educationOptions } from '@/lib/groups';
 import { supabase } from '@/lib/supabase';
 
 interface ProfileModalProps {
@@ -38,7 +43,7 @@ export default function ProfileModal({
   const [name, setName] = useState(currentUser.name || '');
   const [email, setEmail] = useState(currentUser.email || '');
   const [phone, setPhone] = useState((currentUser as SafeTeacherUser).phone || '');
-  const [subject, setSubject] = useState((currentUser as SafeTeacherUser).subject || '');
+  const [teachingSubjects, setTeachingSubjects] = useState<string[]>((currentUser as SafeTeacherUser).teaching_subjects || ((currentUser as SafeTeacherUser).subject ? [(currentUser as SafeTeacherUser).subject] : []));
   const [grade, setGrade] = useState((currentUser as SafeStudentUser).grade || 'X კლასი');
 
   // Password form
@@ -58,11 +63,12 @@ export default function ProfileModal({
       if (currentUser.role === 'TEACHER') {
         const t = currentUser as SafeTeacherUser;
         setPhone(t.phone || '');
-        setSubject(t.subject || '');
+        setTeachingSubjects(t.teaching_subjects || (t.subject ? [t.subject] : []));
       } else if (currentUser.role === 'STUDENT') {
         const s = currentUser as SafeStudentUser;
         setGrade(s.grade || '');
       }
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setError('');
@@ -108,8 +114,8 @@ export default function ProfileModal({
         setError('გთხოვთ შეიყვანოთ მიმდინარე პაროლი');
         return;
       }
-      if (newPassword.length < 6) {
-        setError('ახალი პაროლი უნდა შეიცავდეს მინიმუმ 6 სიმბოლოს');
+      if (newPassword.length < MIN_PASSWORD_LENGTH) {
+        setError('ახალი პაროლი უნდა შეიცავდეს მინიმუმ 8 სიმბოლოს');
         return;
       }
       if (newPassword !== confirmPassword) {
@@ -131,7 +137,8 @@ export default function ProfileModal({
 
       if (isTeacher) {
         payload.phone = phone.trim();
-        payload.subject = subject.trim();
+        if (!teachingSubjects.length) throw new Error('დაამატეთ მინიმუმ ერთი საგანი');
+        payload.teaching_subjects = teachingSubjects;
       } else if (isStudent) {
         payload.grade = grade.trim();
       }
@@ -147,7 +154,7 @@ export default function ProfileModal({
         payload,
         currentPassword || undefined
       );
-      setSuccessMsg('პროფილის მონაცემები წარმატებით განახლდა!');
+      setSuccessMsg(payload.email ? 'მონაცემები შენახულია. ელფოსტის ცვლილება დაადასტურეთ მიღებული წერილით.' : 'პროფილის მონაცემები წარმატებით განახლდა!');
       onUserUpdated(updatedProfile as SafeUser);
 
       if (newPassword) {
@@ -161,19 +168,7 @@ export default function ProfileModal({
       }, 3000);
     } catch (err: any) {
       console.error(err);
-      let msg = err.message || 'სერვერთან კავშირი შეწყდა';
-      if (msg.includes('New password should be different')) {
-        msg = 'ახალი პაროლი უნდა განსხვავდებოდეს ძველისგან';
-      } else if (msg.includes('should be at least 6 characters')) {
-        msg = 'პაროლი უნდა შეიცავდეს მინიმუმ 6 სიმბოლოს';
-      } else if (msg.includes('rate limit')) {
-        msg = 'ძალიან ბევრი მოთხოვნა. გთხოვთ სცადოთ მოგვიანებით.';
-      } else if (msg.includes('Invalid login credentials')) {
-        msg = 'არასწორი ელ. ფოსტა ან პაროლი';
-      } else if (msg.includes('violates unique constraint')) {
-        msg = 'ეს ელ. ფოსტა უკვე გამოყენებულია';
-      }
-      setError(msg);
+      setError(localizeError(err, 'სერვერთან კავშირი შეწყდა'));
     } finally {
       setLoading(false);
     }
@@ -233,7 +228,7 @@ export default function ProfileModal({
                     ) : (
                       <>
                         <GraduationCap className="w-3 h-3" />
-                        მოსწავლე
+                        სტუდენტი
                       </>
                     )}
                   </span>
@@ -355,24 +350,7 @@ export default function ProfileModal({
                 {/* Teacher Fields */}
                 {isTeacher && (
                   <>
-                    <div>
-                      <label htmlFor="profile-subject" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
-                        საგანი
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
-                          <BookOpen className="w-4 h-4" />
-                        </div>
-                        <input
-                          id="profile-subject"
-                          type="text"
-                          required
-                          value={subject}
-                          onChange={(e) => setSubject(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
-                        />
-                      </div>
-                    </div>
+                    <TeacherSubjectPicker value={teachingSubjects} onChange={setTeachingSubjects} />
 
                     <div>
                       <label htmlFor="profile-phone" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
@@ -399,21 +377,9 @@ export default function ProfileModal({
                 {isStudent && (
                   <div>
                     <label htmlFor="profile-grade" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
-                      კლასი
+                      სასკოლო განათლება / კლასი
                     </label>
-                    <select
-                      id="profile-grade"
-                      value={grade}
-                      onChange={(e) => setGrade(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 rounded-xl text-slate-900 dark:text-slate-100 text-sm outline-none transition-all"
-                    >
-                      <option value="VII კლასი">VII კლასი</option>
-                      <option value="VIII კლასი">VIII კლასი</option>
-                      <option value="IX კლასი">IX კლასი</option>
-                      <option value="X კლასი">X კლასი</option>
-                      <option value="XI კლასი">XI კლასი</option>
-                      <option value="XII კლასი">XII კლასი</option>
-                    </select>
+                    <CustomSelect id="profile-grade" value={grade} onChange={setGrade} options={[...new Set(['VII კლასი','VIII კლასი',...educationOptions,...(grade?[grade]:[])])].map(value=>({value,label:value}))} placeholder="აირჩიეთ სასკოლო განათლება" />
                   </div>
                 )}
               </>
@@ -442,7 +408,7 @@ export default function ProfileModal({
 
                 <div>
                   <label htmlFor="profile-new-password" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1.5">
-                    ახალი პაროლი * (მინიმუმ 6 სიმბოლო)
+                    ახალი პაროლი * (მინიმუმ 8 სიმბოლო)
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
@@ -452,7 +418,7 @@ export default function ProfileModal({
                       id="profile-new-password"
                       type="password"
                       required
-                      minLength={6}
+                      minLength={MIN_PASSWORD_LENGTH}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="შეიყვანეთ ახალი პაროლი"
@@ -473,7 +439,7 @@ export default function ProfileModal({
                       id="profile-confirm-password"
                       type="password"
                       required
-                      minLength={6}
+                      minLength={MIN_PASSWORD_LENGTH}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="გაიმეორეთ ახალი პაროლი"

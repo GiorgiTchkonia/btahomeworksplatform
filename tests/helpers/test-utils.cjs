@@ -31,6 +31,7 @@ const runnerState = {
   failedTests: 0,
   skippedTests: 0,
   startTime: 0,
+  pendingTests: [],
 };
 
 function describe(suiteName, fn) {
@@ -72,19 +73,28 @@ function test(testName, fn, options = {}) {
     return;
   }
 
-  const start = Date.now();
-  try {
-    fn();
-    const durationMs = Date.now() - start;
-    suite.passes++;
-    runnerState.passedTests++;
-    suite.tests.push({ name: testName, status: 'PASS', error: null, durationMs });
-  } catch (err) {
-    const durationMs = Date.now() - start;
-    suite.fails++;
-    runnerState.failedTests++;
-    suite.tests.push({ name: testName, status: 'FAIL', error: err, durationMs });
-  }
+  const result = { name: testName, status: 'PENDING', error: null, durationMs: 0 };
+  suite.tests.push(result);
+  // Chain tests to preserve deterministic ordering and await every async assertion.
+  const previous = runnerState.pendingTests.at(-1) || Promise.resolve();
+  const pending = previous.then(async () => {
+    const start = Date.now();
+    try {
+      await fn();
+      suite.passes++;
+      runnerState.passedTests++;
+      result.status = 'PASS';
+    } catch (error) {
+      suite.fails++;
+      runnerState.failedTests++;
+      result.status = 'FAIL';
+      result.error = error;
+    } finally {
+      result.durationMs = Date.now() - start;
+      suite.durationMs += result.durationMs;
+    }
+  });
+  runnerState.pendingTests.push(pending);
 }
 
 // Assertions

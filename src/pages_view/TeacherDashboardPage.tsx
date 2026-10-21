@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import DashboardDialog from '@/components/DashboardDialog';
+import { localizeError } from '@/lib/messages';
+import { useUploadDraft } from '@/lib/useUploadDraft';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import {
   Plus, Calendar, Users, FileText, CheckCircle2,
@@ -6,13 +9,19 @@ import {
   Edit3, Save
 } from 'lucide-react';
 import { Subject, TeacherUser, AssignmentWithMeta } from '@/types';
-import { getTeacherDashboardData, createAssignment, deleteAssignment, uploadFile, updateAssignment } from '@/lib/api';
+import { getTeacherDashboardData, createAssignment, deleteAssignment, updateAssignment } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import DateTimePicker from '@/components/DateTimePicker';
 import { useDialog } from '@/components/ui/DialogProvider';
-import CustomCheckbox from '@/components/ui/CustomCheckbox';
+import FileFormatPicker from '@/components/FileFormatPicker';
+import GroupPicker from '@/components/GroupPicker';
+import CustomSelect from '@/components/ui/CustomSelect';
+import { CollegeGroup } from '@/types';
+import { getCollegeGroups } from '@/lib/groups';
+import TeacherGroupsPanel from '@/components/TeacherGroupsPanel';
 
 export default function TeacherDashboardPage() {
+  const uploadDraft = useUploadDraft();
   const [, navigate] = useLocation();
   const { showAlert, showConfirm } = useDialog();
   const [user, setUser] = useState<TeacherUser | null>(null);
@@ -20,6 +29,16 @@ export default function TeacherDashboardPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [groups, setGroups] = useState<CollegeGroup[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [newGroupIds, setNewGroupIds] = useState<string[]>([]);
+  const [editGroupIds, setEditGroupIds] = useState<string[]>([]);
+  const [roster, setRoster] = useState<Array<{ id: string; name: string; submitted: number; missing: number; approved: number; pending: number; declined: number }>>([]);
+
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
+  const [studentSubmissions, setStudentSubmissions] = useState<Array<{ assignment_id: string; student_id: string; status: string }>>([]);
+  const request = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,8 +63,17 @@ export default function TeacherDashboardPage() {
   const [editFormError, setEditFormError] = useState('');
   const [updating, setUpdating] = useState(false);
 
+  const closeCreateModal = () => {
+    if (uploadingFile || creating) return;
+    uploadDraft.discard();
+    setNewAttachmentUrl('');
+    setNewAttachmentName('');
+    setIsModalOpen(false);
+  };
+
   const loadData = async () => {
-    setLoading(true);
+    const version = ++request.current;
+    setRefreshing(true);
     setLoadError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -56,32 +84,44 @@ export default function TeacherDashboardPage() {
       if (!profile || profile.role !== 'TEACHER') { navigate('/login'); return; }
       setUser(profile as TeacherUser);
 
-      const data = await getTeacherDashboardData(session.user.id);
+      const availableGroups = await getCollegeGroups();
+      setGroups(availableGroups);
+      if (selectedGroup && !availableGroups.some(g => g.id === selectedGroup)) setSelectedGroup('');
+      const data = await getTeacherDashboardData(session.user.id, selectedGroup || undefined);
+      if (version !== request.current) return;
+      setStudentSubmissions(data.submissions);
       setAssignments(data.assignments);
+      setRoster(data.students.map(student => {
+        const relevant = data.assignments.filter(a => a.groupIds?.includes(student.group_id));
+        const ids = new Set(relevant.map(a => a.id));
+        const submitted = data.submissions.filter(s => s.student_id === student.id && ids.has(s.assignment_id));
+        return { id: student.id, name: student.name, submitted: submitted.length, missing: Math.max(0, relevant.length-submitted.length), approved: submitted.filter(s => s.status==='APPROVED').length, pending: submitted.filter(s => s.status==='SUBMITTED').length, declined: submitted.filter(s => s.status==='DECLINED').length };
+      }));
       setSubjects(data.subjects);
       if (data.subjects?.length > 0 && !newSubjectId) {
         setNewSubjectId(data.subjects[0].id);
       }
     } catch (err: any) {
       console.error(err);
-      setLoadError(err?.message || 'მონაცემების ჩატვირთვა ვერ მოხერხდა');
+      if (version !== request.current) return;
+      setLoadError(localizeError(err, 'მონაცემების ჩატვირთვა ვერ მოხერხდა'));
     } finally {
-      setLoading(false);
+      if (version === request.current) { setLoading(false); setRefreshing(false); }
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [selectedGroup]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingFile(true);
     try {
-      const result = await uploadFile(file);
+      const result = await uploadDraft.upload(file);
       setNewAttachmentUrl(result.fileUrl);
       setNewAttachmentName(result.fileName);
     } catch (err: any) {
-      showAlert(err.message || 'ფაილის ატვირთვა ვერ მოხერხდა', 'error');
+      showAlert(localizeError(err, 'ფაილის ატვირთვა ვერ მოხერხდა'), 'error');
     } finally {
       setUploadingFile(false);
     }
@@ -95,11 +135,13 @@ export default function TeacherDashboardPage() {
       setFormError('გთხოვთ შეავსოთ ყველა სავალდებულო ველი');
       return;
     }
+    if (!newGroupIds.length) { setFormError('აირჩიეთ მინიმუმ ერთი ჯგუფი'); return; }
 
     setCreating(true);
     try {
       await createAssignment({
         teacherId: user.id,
+        groupIds: newGroupIds,
         subjectId: newSubjectId,
         title: newTitle.trim(),
         description: newDescription.trim(),
@@ -109,6 +151,7 @@ export default function TeacherDashboardPage() {
         allowedFormats: allowedFormats.length > 0 ? allowedFormats : undefined,
       });
 
+      uploadDraft.saved(newAttachmentUrl);
       setIsModalOpen(false);
       setNewTitle('');
       setNewDescription('');
@@ -116,10 +159,11 @@ export default function TeacherDashboardPage() {
       setNewAttachmentUrl('');
       setNewAttachmentName('');
       setAllowedFormats([]);
+      setNewGroupIds([]);
       setFormError('');
       await loadData();
     } catch (err: any) {
-      setFormError(err.message || 'დავალების შექმნა ვერ მოხერხდა');
+      setFormError(localizeError(err, 'დავალების შექმნა ვერ მოხერხდა'));
     } finally {
       setCreating(false);
     }
@@ -131,6 +175,7 @@ export default function TeacherDashboardPage() {
     setEditDescription(a.description);
     setEditDueDate(a.dueDate);
     setEditAllowedFormats(a.allowedFormats || []);
+    setEditGroupIds(a.groupIds || []);
     setEditFormError('');
     setIsEditModalOpen(true);
   };
@@ -149,6 +194,7 @@ export default function TeacherDashboardPage() {
     try {
       await updateAssignment(editingAssignmentId, {
         title: editTitle.trim(),
+        groupIds: editGroupIds,
         description: editDescription.trim(),
         dueDate: editDueDate,
         allowedFormats: editAllowedFormats,
@@ -157,7 +203,7 @@ export default function TeacherDashboardPage() {
       showAlert('დავალება წარმატებით განახლდა', 'success');
       await loadData();
     } catch (err: any) {
-      setEditFormError(err.message || 'დავალების განახლება ვერ მოხერხდა');
+      setEditFormError(localizeError(err, 'დავალების განახლება ვერ მოხერხდა'));
     } finally {
       setUpdating(false);
     }
@@ -193,7 +239,7 @@ export default function TeacherDashboardPage() {
     <div className="space-y-6 pb-12">
 
       {/* ── Header Banner ── */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 sm:p-7 border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative overflow-hidden">
+      <div className="bg-gradient-to-br from-white via-white to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-indigo-950/60 rounded-3xl p-6 sm:p-8 border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-48 h-48 rounded-bl-full bg-[#2B4EFF]/3 pointer-events-none" />
 
         <div className="space-y-2 relative z-10">
@@ -205,7 +251,7 @@ export default function TeacherDashboardPage() {
             გამარჯობა, {user?.name}
           </h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm max-w-xl leading-relaxed">
-            შექმენით დავალებები, მიეცით ვადები და ადევნეთ თვალი მოსწავლეების პროგრესს ერთ ადგილიდან.
+            შექმენით დავალებები, მიეცით ვადები და ადევნეთ თვალი სტუდენტების პროგრესს ერთ ადგილიდან.
           </p>
         </div>
 
@@ -246,7 +292,15 @@ export default function TeacherDashboardPage() {
       )}
 
       {/* ── Stats row ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div aria-busy={refreshing} className={refreshing?'opacity-60 pointer-events-none transition-opacity':'transition-opacity'}><TeacherGroupsPanel groups={groups} selected={selectedGroup} onChange={group => { setSelectedStudent(null); setSelectedGroup(group); }} roster={roster} onStudent={setSelectedStudent} /></div>
+      {selectedStudent && <DashboardDialog title={selectedStudent.name} subtitle="ჩაბარებული დავალებები" onClose={()=>setSelectedStudent(null)}>
+        {assignments.filter(a=>studentSubmissions.some(s=>s.student_id===selectedStudent.id && s.assignment_id===a.id)).map(a=> {
+          const submission = studentSubmissions.find(s=>s.student_id===selectedStudent.id && s.assignment_id===a.id)!;
+          return <Link key={a.id} href={`/teacher/assignments/${a.id}?${new URLSearchParams({ ...(selectedGroup ? { group: selectedGroup } : {}), student: selectedStudent.id })}`} className="block rounded-2xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"><span className="text-xs font-bold text-indigo-600 dark:text-indigo-300">{a.subjectName} · {submission.status==='APPROVED'?'დადასტურებულია':submission.status==='DECLINED'?'დაბრუნებულია':'განსახილველია'}</span><span className="mt-2 flex items-center justify-between gap-3 font-bold">{a.title}<ChevronRight size={18} className="shrink-0"/></span></Link>;
+        })}
+        {!studentSubmissions.some(s=>s.student_id===selectedStudent.id) && <div className="py-10 text-center"><FileText className="mx-auto text-slate-400 mb-3" size={32}/><p className="text-sm text-slate-500">სტუდენტს დავალება ჯერ არ ჩაუბარებია.</p></div>}
+      </DashboardDialog>}
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-[#2B4EFF]/8 text-[#2B4EFF] flex items-center justify-center shrink-0">
             <FileText className="w-6 h-6" />
@@ -272,8 +326,8 @@ export default function TeacherDashboardPage() {
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">საგანი</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-slate-100 truncate">{user?.subject || 'მასწავლებელი'}</p>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">საგნები · {subjects.length}</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-slate-100">{subjects.map(s=>s.name).join(' · ') || 'საგანი ჯერ არ დამატებულა'}</p>
           </div>
         </div>
       </div>
@@ -285,7 +339,7 @@ export default function TeacherDashboardPage() {
             ჩემი დავალებები ({assignments.length})
           </h2>
           <span className="text-xs text-gray-400 dark:text-slate-500 font-medium hidden sm:block">
-            განსახილველი ნამუშევრები ნაჩვენებია ყველა დავალებასთან
+            დავალებები და ჯგუფების პროგრესი
           </span>
         </div>
 
@@ -338,7 +392,7 @@ export default function TeacherDashboardPage() {
                         )}
                       </div>
                       <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-slate-100 break-words">{assignment.title}</h3>
-                      <p className="text-sm text-gray-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{assignment.description}</p>
+                      <div className="pt-2 flex items-center gap-3"><div className="h-1.5 w-28 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className="h-full rounded-full bg-indigo-500" style={{width: `${assignment.totalStudents ? Math.min(100, (assignment.submissionsCount || 0) / assignment.totalStudents * 100) : 0}%`}} /></div><span className="text-xs text-slate-500">{assignment.submissionsCount || 0}/{assignment.totalStudents} ჩაბარება</span></div>
 
                       {assignment.attachmentUrl && (
                         <div className="inline-flex max-w-full items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-100 text-xs font-semibold text-amber-800 overflow-hidden">
@@ -357,7 +411,7 @@ export default function TeacherDashboardPage() {
 
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/teacher/assignments/${assignment.id}`}
+                          href={`/teacher/assignments/${assignment.id}${selectedGroup ? `?group=${encodeURIComponent(selectedGroup)}` : ''}`}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2B4EFF]/8 text-[#2B4EFF] hover:bg-[#2B4EFF] hover:text-white font-bold text-xs transition-all"
                         >
                           ნახვა
@@ -393,7 +447,7 @@ export default function TeacherDashboardPage() {
       {isModalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-gray-900/60 backdrop-blur-sm"
-          onClick={() => setIsModalOpen(false)}
+          onClick={closeCreateModal}
         >
           <div 
             role="dialog"
@@ -411,7 +465,7 @@ export default function TeacherDashboardPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeCreateModal}
                 aria-label="დახურვა"
                 className="w-9 h-9 rounded-full bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 flex items-center justify-center transition-colors"
               >
@@ -429,19 +483,12 @@ export default function TeacherDashboardPage() {
                   </div>
                 )}
 
+                <GroupPicker groups={groups} selected={newGroupIds} onChange={setNewGroupIds} />
                 {/* Subject */}
                 <div>
                   <label htmlFor="teacher-subject-select" className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">საგანი</label>
-                  <select
-                    id="teacher-subject-select"
-                    value={newSubjectId}
-                    onChange={(e) => setNewSubjectId(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:border-[#2B4EFF] focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30 rounded-xl text-sm font-semibold outline-none transition-all text-gray-900 dark:text-slate-100"
-                  >
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                  <CustomSelect id="teacher-subject-select" value={newSubjectId} onChange={setNewSubjectId} options={subjects.map(s=>({value:s.id,label:s.name}))} placeholder="აირჩიეთ დავალების საგანი" />
+
                 </div>
 
                 {/* Title */}
@@ -493,27 +540,7 @@ export default function TeacherDashboardPage() {
                     თუ არ აირჩევთ, ნებისმიერი ფორმატის ჩაბარება შეეძლებათ (ყველა ფორმატი დაშვებული იქნება).
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {[
-                      { id: '.pdf', label: 'PDF' },
-                      { id: '.doc,.docx', label: 'Word' },
-                      { id: '.ppt,.pptx', label: 'PowerPoint' },
-                      { id: '.xls,.xlsx', label: 'Excel' },
-                      { id: '.jpg,.jpeg,.png,.webp', label: 'სურათი' },
-                    ].map((format) => (
-                      <div key={format.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-                        <CustomCheckbox
-                          label={format.label}
-                          checked={allowedFormats.includes(format.id)}
-                          onChange={(checked) => {
-                            if (checked) {
-                              setAllowedFormats([...allowedFormats, format.id]);
-                            } else {
-                              setAllowedFormats(allowedFormats.filter((f) => f !== format.id));
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
+                    <FileFormatPicker selected={allowedFormats} onChange={setAllowedFormats} />
                   </div>
                 </div>
 
@@ -558,7 +585,7 @@ export default function TeacherDashboardPage() {
               <div className="p-4 sm:p-5 bg-gray-50 dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeCreateModal}
                   className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-sm font-bold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   გაუქმება
@@ -610,6 +637,7 @@ export default function TeacherDashboardPage() {
             {/* Scrollable form */}
             <form onSubmit={handleUpdateAssignment} className="flex flex-col flex-1 overflow-hidden">
               <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-5">
+                <GroupPicker groups={groups} selected={editGroupIds} onChange={setEditGroupIds} />
                 {editFormError && (
                   <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs font-semibold rounded-xl flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
@@ -666,27 +694,7 @@ export default function TeacherDashboardPage() {
                     თუ არ აირჩევთ, ნებისმიერი ფორმატის ჩაბარება შეეძლებათ.
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {[
-                      { id: '.pdf', label: 'PDF' },
-                      { id: '.doc,.docx', label: 'Word' },
-                      { id: '.ppt,.pptx', label: 'PowerPoint' },
-                      { id: '.xls,.xlsx', label: 'Excel' },
-                      { id: '.jpg,.jpeg,.png,.webp', label: 'სურათი' },
-                    ].map((format) => (
-                      <div key={format.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-                        <CustomCheckbox
-                          label={format.label}
-                          checked={editAllowedFormats.includes(format.id)}
-                          onChange={(checked) => {
-                            if (checked) {
-                              setEditAllowedFormats([...editAllowedFormats, format.id]);
-                            } else {
-                              setEditAllowedFormats(editAllowedFormats.filter((f) => f !== format.id));
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
+                    <FileFormatPicker selected={editAllowedFormats} onChange={setEditAllowedFormats} />
                   </div>
                 </div>
               </div>

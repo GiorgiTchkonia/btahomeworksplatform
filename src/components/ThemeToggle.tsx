@@ -21,7 +21,7 @@ export default function ThemeToggle({ className = '', showLabel = false, onToggl
     <button
       type="button"
       onClick={handleToggle}
-      aria-label="Toggle theme"
+      aria-label="ფერის თემის შეცვლა"
       title={isDark ? 'ნათელ რეჟიმზე გადართვა' : 'ბნელ რეჟიმზე გადართვა'}
       className={`group relative inline-flex items-center gap-2.5 p-2 rounded-xl text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors duration-300 focus:outline-none select-none ${className}`}
     >

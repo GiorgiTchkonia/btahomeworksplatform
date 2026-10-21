@@ -1,8 +1,8 @@
+import { localizeError } from '@/lib/messages';
 import React, { useState } from 'react';
-import { useLocation, Link } from 'wouter';
+import { Link } from 'wouter';
 import { Eye, EyeOff, ArrowRight, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import BtaLogo from '@/components/BtaLogo';
 import { useDialog } from '@/components/ui/DialogProvider';
 
 interface LoginPageProps {
@@ -16,7 +16,6 @@ function validateEmail(emailStr: string): boolean {
 }
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
-  const [, navigate] = useLocation();
   const { showAlert } = useDialog();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,6 +50,12 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         return;
       }
 
+      if (!data.user.email_confirmed_at) {
+        await supabase.auth.signOut();
+        showAlert('შესვლამდე დაადასტურეთ ელფოსტა მიღებული მოწვევის ბმულით.', 'error');
+        setLoading(false);
+        return;
+      }
       setLoading(false);
       if (onLoginSuccess) onLoginSuccess();
 
@@ -73,28 +78,34 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     setResetLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { data, error } = await supabase.functions.invoke('password-recovery', {
+        body: { email: resetEmail.trim().toLowerCase() },
       });
 
       if (error) {
-        setResetError(error.message || 'პაროლის აღდგენა ვერ მოხერხდა');
+        let message = 'პაროლის აღდგენა ვერ მოხერხდა. სცადეთ მოგვიანებით.';
+        if ('context' in error && error.context instanceof Response) {
+          try { const payload = await error.context.json(); if (typeof payload.error === 'string') message = payload.error; } catch { /* Preserve fallback for network failures. */ }
+        }
+        setResetError(message);
         return;
       }
 
-      setResetSuccess('პაროლის აღდგენის ინსტრუქცია გაგზავნილია თქვენს ელფოსტაზე.');
+      if (!data?.success) { setResetError('პაროლის აღდგენა ვერ მოხერხდა. სცადეთ მოგვიანებით.'); return; }
+      setResetSuccess('მოთხოვნა დადასტურებულია. პაროლის აღდგენის ბმული გაიგზავნა თქვენს ელფოსტაზე.');
     } catch (err: any) {
-      setResetError(err?.message || 'შეცდომა პაროლის აღდგენისას');
+      setResetError(localizeError(err, 'შეცდომა პაროლის აღდგენისას'));
     } finally {
       setResetLoading(false);
     }
   };
 
   return (
-    <div className="flex-1 min-h-[calc(100vh-130px)] grid grid-cols-1 lg:grid-cols-2">
+    <div className="flex-1 w-full max-w-7xl mx-auto px-5 sm:px-8 py-8 sm:py-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 overflow-hidden rounded-3xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
 
       {/* ── Left: Branding panel (desktop only) ── */}
-      <div className="hidden lg:flex flex-col justify-between bg-[#111827] p-14 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between gap-10 bg-[#111827] p-10 xl:p-14 relative overflow-hidden">
         {/* Background pattern */}
         <div className="absolute inset-0 opacity-[0.04]"
           style={{
@@ -106,14 +117,6 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-[#2B4EFF]/15 blur-3xl pointer-events-none" />
 
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-16">
-            <BtaLogo size={38} />
-            <div>
-              <span className="block text-[15px] font-bold text-white tracking-tight">BTA<span className="text-[#2B4EFF]">.</span></span>
-              <span className="block text-[10px] text-gray-500 dark:text-slate-400 tracking-widest uppercase mt-0.5">სასწავლო პორტალი</span>
-            </div>
-          </div>
-
           <h2 className="text-[38px] font-black text-white leading-tight tracking-tight mb-5">
             ბიზნესისა და<br />ტექნოლოგიების<br />
             <span className="text-[#2B4EFF]">აკადემია</span>
@@ -136,17 +139,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       </div>
 
       {/* ── Right: Login form ── */}
-      <div className="flex items-center justify-center px-5 py-16 bg-white dark:bg-slate-900 transition-colors duration-300">
+      <div className="flex items-center justify-center px-5 sm:px-10 py-10 sm:py-14 bg-white dark:bg-slate-900 transition-colors duration-300">
         <div className="w-full max-w-[400px]">
-
-          {/* Mobile brand */}
-          <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <BtaLogo size={34} />
-            <div>
-              <span className="block text-[14px] font-bold text-gray-900 dark:text-white">BTA<span className="text-[#2B4EFF]">.</span></span>
-              <span className="block text-[10px] text-gray-400 dark:text-slate-400 uppercase tracking-widest mt-0.5">სასწავლო პორტალი</span>
-            </div>
-          </div>
 
           {/* Header */}
           <div className="mb-9">
@@ -256,6 +250,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         </div>
       </div>
 
+      </div>
       {/* ── Modal: Password Recovery ("პაროლის აღდგენა") ── */}
       {forgotModalOpen && (
         <div
@@ -289,7 +284,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             </div>
 
             {resetSuccess ? (
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-emerald-800 dark:text-emerald-300 text-xs font-semibold space-y-3 text-center">
+              <div role="status" className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-emerald-800 dark:text-emerald-300 text-xs font-semibold space-y-3 text-center">
                 <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400 mx-auto" />
                 <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">{resetSuccess}</p>
                 <button
@@ -301,9 +296,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleResetPassword} className="space-y-4">
+              <form onSubmit={handleResetPassword} noValidate className="space-y-4">
                 {resetError && (
-                  <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs font-semibold rounded-xl flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{resetError}</span>
                   </div>
@@ -318,7 +313,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     type="email"
                     required
                     value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
+                    onChange={(e) => { setResetEmail(e.target.value); setResetError(''); }}
+                    aria-invalid={Boolean(resetError)}
                     placeholder="mail@bta.ge"
                     className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-gray-200 dark:border-slate-700 focus:border-[#2B4EFF] focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30 rounded-xl text-sm outline-none transition-all text-gray-900 dark:text-slate-100"
                   />

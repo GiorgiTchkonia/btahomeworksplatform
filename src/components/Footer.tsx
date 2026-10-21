@@ -23,7 +23,7 @@ export default function Footer() {
               </div>
             </div>
             <p className="text-[13px] text-gray-400 dark:text-slate-500 leading-relaxed max-w-xs">
-              ბიზნესისა და ტექნოლოგიების აკადემიის სასწავლო პლატფორმა — მოსწავლეების, მასწავლებლებისა და ადმინისტრაციისთვის.
+              ბიზნესისა და ტექნოლოგიების აკადემიის სასწავლო პლატფორმა — სტუდენტების, მასწავლებლებისა და ადმინისტრაციისთვის.
             </p>
             <a
               href="https://bta.edu.ge"
@@ -85,7 +85,7 @@ export default function Footer() {
             © {year} BTA — ბიზნესისა და ტექნოლოგიების აკადემია
           </p>
           <p className="text-[12px] text-gray-600 dark:text-slate-400">
-            შექმნილია BTA-ს სტუდენტების მიერ
+            შექმნილია BTA-ს სტუდენტის მიერ
           </p>
         </div>
       </div>

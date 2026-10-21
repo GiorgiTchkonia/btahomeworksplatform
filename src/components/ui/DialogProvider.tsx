@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import ConfirmModal from './ConfirmModal';
-import { AlertCircle, X } from 'lucide-react';
+import { localizeError } from '@/lib/messages';
+import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 
 interface DialogContextType {
   showAlert: (message: string, type?: 'error' | 'success' | 'info') => void;
@@ -30,7 +31,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   });
 
   const showAlert = (message: string, type: 'error' | 'success' | 'info' = 'info') => {
-    setAlertState({ isOpen: true, message, type });
+    setAlertState({ isOpen: true, message: type==='error'?localizeError(message):message, type });
   };
 
   const showConfirm = (title: string, message: string, onConfirm: () => void) => {
@@ -59,11 +60,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
               >
                 <X className="w-4 h-4" />
               </button>
-              <div className={"w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 "}>
-                <AlertCircle className="w-8 h-8" />
+              <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 ${alertState.type === 'error' ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : alertState.type === 'success' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'}`}>
+                {alertState.type === 'success' ? <CheckCircle2 className="w-8 h-8" aria-hidden="true" /> : alertState.type === 'error' ? <AlertCircle className="w-8 h-8" aria-hidden="true" /> : <Info className="w-8 h-8" aria-hidden="true" />}
               </div>
-              <h3 id="dialog-alert-title" className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">შეტყობინება</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">{alertState.message}</p>
+              <h3 id="dialog-alert-title" className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">{alertState.type === 'error' ? 'ვერ შესრულდა' : alertState.type === 'success' ? 'დადასტურებულია' : 'შეტყობინება'}</h3>
+              <p role={alertState.type === 'error' ? 'alert' : 'status'} className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">{alertState.message}</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700">
               <button

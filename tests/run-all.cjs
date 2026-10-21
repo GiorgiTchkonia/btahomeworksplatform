@@ -21,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const { colors, runnerState } = require('./helpers/test-utils.cjs');
 
+async function main() {
 // Parse CLI Arguments
 const args = process.argv.slice(2);
 let targetTier = null;
@@ -37,7 +38,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 console.log(`${colors.cyan}${colors.bold}======================================================================${colors.reset}`);
-console.log(`${colors.cyan}${colors.bold}       BTA Homeworks — Master Automated E2E Test Suite Runner        ${colors.reset}`);
+console.log(`${colors.cyan}${colors.bold}       BTA Homeworks — Automated Checks and Scenario Test Runner        ${colors.reset}`);
 console.log(`${colors.cyan}${colors.bold}======================================================================${colors.reset}\n`);
 
 const tiers = [
@@ -82,6 +83,7 @@ for (const tier of tiers) {
     }
   }
 
+  await Promise.all(runnerState.pendingTests);
   const tierSuites = runnerState.suites.slice(tierStartSuitesCount);
   let tierPass = 0;
   let tierFail = 0;
@@ -122,6 +124,9 @@ for (const tier of tiers) {
 }
 
 const totalDurationMs = Date.now() - startTime;
+if (runnerState.totalTests === 0) {
+  throw new Error('No tests matched. Check --tier and --suite filters.');
+}
 
 // Final Summary Report
 console.log(`${colors.cyan}${colors.bold}----------------------------------------------------------------------${colors.reset}`);
@@ -151,3 +156,6 @@ if (runnerState.failedTests > 0) {
   console.log(`\n${colors.bgGreen}${colors.white}${colors.bold} ALL TESTS PASSED SUCCESSFULLY! (${runnerState.passedTests}/${runnerState.totalTests}) ${colors.reset}\n`);
   process.exit(0);
 }
+
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

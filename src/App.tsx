@@ -6,11 +6,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
 import { DialogProvider } from './components/ui/DialogProvider';
 import { ThemeProvider } from './components/ui/ThemeProvider';
+import LocalizedForms from './components/ui/LocalizedForms';
 import { User } from './types';
 import { supabase } from './lib/supabase';
 
 // Route-level code splitting using React.lazy()
 const LoginPage = React.lazy(() => import('./pages_view/LoginPage'));
+const ResetPasswordPage = React.lazy(() => import('./pages_view/ResetPasswordPage'));
 const TeacherDashboardPage = React.lazy(() => import('./pages_view/TeacherDashboardPage'));
 const TeacherAssignmentDetailsPage = React.lazy(() => import('./pages_view/TeacherAssignmentDetailsPage'));
 const StudentDashboardPage = React.lazy(() => import('./pages_view/StudentDashboardPage'));
@@ -41,19 +43,30 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [, navigate] = useLocation();
   const inFlightCheckRef = useRef<Promise<void> | null>(null);
+  const authVersion = useRef(0);
 
   const checkUser = async () => {
     if (inFlightCheckRef.current) {
       return inFlightCheckRef.current;
     }
 
+    const version = authVersion.current;
     const promise = (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (!session) {
+        if (!session || !session.user.email_confirmed_at) {
+          if (version !== authVersion.current) return;
           setUser(null);
           setLoading(false);
+          return;
+        }
+
+        const { data: accountState, error: activationError } = await supabase.rpc('get_my_account_state');
+        if (version !== authVersion.current) return;
+        if (activationError || accountState !== 'ACTIVE') {
+          setUser(null);
+          if (accountState === 'PASSWORD_REQUIRED') navigate('/accept-invite');
           return;
         }
 
@@ -63,16 +76,19 @@ export default function App() {
           .eq('id', session.user.id)
           .single();
           
+        if (version !== authVersion.current) return;
         if (error || !profile) {
           setUser(null);
         } else {
           setUser(profile as User);
         }
       } catch {
-        setUser(null);
+        if (version === authVersion.current) setUser(null);
       } finally {
-        setLoading(false);
-        inFlightCheckRef.current = null;
+        if (version === authVersion.current) {
+          setLoading(false);
+          inFlightCheckRef.current = null;
+        }
       }
     })();
 
@@ -82,23 +98,35 @@ export default function App() {
 
   useEffect(() => {
     checkUser();
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const scheduleCheck = () => {
+      const timer = setTimeout(() => { timers.delete(timer); void checkUser(); }, 0);
+      timers.add(timer);
+    };
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        navigate('/reset-password');
+        return;
+      }
       if (event === 'SIGNED_OUT') {
+        authVersion.current++;
+        inFlightCheckRef.current = null;
         setUser(null);
         setLoading(false);
       } else if (event === 'TOKEN_REFRESHED') {
         // Prevent redundant profile query on token refresh if session already active
         if (!user && session) {
-          checkUser();
+          scheduleCheck();
         }
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        checkUser();
+        scheduleCheck();
       }
     });
 
     return () => {
       authListener.subscription.unsubscribe();
+      timers.forEach(clearTimeout);
     };
   }, [user?.id]);
 
@@ -114,12 +142,15 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="system" storageKey="bta-theme">
         <DialogProvider>
+          <LocalizedForms>
           <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200">
             <Navbar user={user} onLogout={() => setUser(null)} onUserUpdated={(u) => setUser(u)} />
             
             <main className="flex-1 flex flex-col w-full">
               <Suspense fallback={<PageLoadingSkeleton />}>
                 <Switch>
+                  <Route path="/reset-password"><ResetPasswordPage /></Route>
+                  <Route path="/accept-invite"><ResetPasswordPage invitation /></Route>
                   <Route path="/">
                     {() => {
                       if (!user) return <DocumentationPage />;
@@ -203,6 +234,7 @@ export default function App() {
 
           <Footer />
         </div>
+          </LocalizedForms>
       </DialogProvider>
       </ThemeProvider>
     </ErrorBoundary>

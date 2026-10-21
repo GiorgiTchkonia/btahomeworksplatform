@@ -6,11 +6,15 @@ import {
   Sparkles, CalendarDays
 } from 'lucide-react';
 
-/* ─── Scroll reveal (fires once per element for the 2 target sections) ─── */
+/* Reveal once as cards enter the viewport; no scroll handlers or React updates. */
 function useReveal() {
   useEffect(() => {
+    const elements = document.querySelectorAll<HTMLElement>('.rv, .rv-l, .rv-r');
+    if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      elements.forEach(element => element.classList.add('is-visible'));
+      return;
+    }
     const run = () => {
-      const els = document.querySelectorAll<HTMLElement>('.rv, .rv-l, .rv-r');
       const obs = new IntersectionObserver(
         (entries) => {
           entries.forEach((e) => {
@@ -20,9 +24,9 @@ function useReveal() {
             }
           });
         },
-        { threshold: 0.12 }
+        { threshold: 0.08 }
       );
-      els.forEach((el) => obs.observe(el));
+      elements.forEach((el) => obs.observe(el));
       return obs;
     };
     const obs = run();
@@ -32,9 +36,9 @@ function useReveal() {
 
 /* ─── Reliable image helper (with fallback bg) ─── */
 function Img({
-  src, alt, className = '', style,
+  src, alt, className = '', style, eager = false,
 }: {
-  src: string; alt: string; className?: string; style?: React.CSSProperties;
+  src: string; alt: string; className?: string; style?: React.CSSProperties; eager?: boolean;
 }) {
   return (
     <img
@@ -47,23 +51,24 @@ function Img({
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.display = 'none';
       }}
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
     />
   );
 }
 
 /* ─── Data ─── */
 const FEATURES = [
-  { icon: BookOpen, title: 'დავალებების ატვირთვა', desc: 'მასწავლებელი ქმნის დავალებას, ნიშნავს ვადას. მოსწავლე ჩააბარებს ფაილს — ფოსტა და Messenger საჭირო აღარ არის.' },
+  { icon: BookOpen, title: 'დავალებების ატვირთვა', desc: 'მასწავლებელი ქმნის დავალებას, ნიშნავს ვადას. სტუდენტი ჩააბარებს ფაილს — ფოსტა და Messenger საჭირო აღარ არის.' },
   { icon: BarChart3, title: 'ქულები და შეფასება', desc: 'ყველა ჩაბარებული სამუშაო ჩანს ერთ სიაში. მასწავლებელი ადვილად ადევნებს თვალს ვინ ჩააბარა, ვინ — არა.' },
   { icon: Clock, title: 'ვადების კონტროლი', desc: 'deadline-ების მართვა სისტემაში. ყველა ვიცით — ბოლო ვადა ყველაზე მნიშვნელოვანია.' },
-  { icon: Shield, title: 'სამი დონის წვდომა', desc: 'მოსწავლე, მასწავლებელი, ადმინი — ყველა ხედავს მხოლოდ იმ ინფორმაციას, რაც მისი ფუნქციაა.' },
+  { icon: Shield, title: 'სამი დონის წვდომა', desc: 'სტუდენტი, მასწავლებელი, ადმინი — ყველა ხედავს მხოლოდ იმ ინფორმაციას, რაც მისი ფუნქციაა.' },
   { icon: Users, title: 'ჯგუფების მართვა', desc: 'ადმინი ადგენს ჯგუფებს, ნიშნავს მასწავლებლებს და ახდენს ყველა საქმიანობის მონიტორინგს.' },
   { icon: CalendarDays, title: 'სრულიად ქართული', desc: 'ინტერფეისი, ფუნქციები და ყველა ტექსტი — ქართულ ენაზე, BTA-ს ყოველდღიური გამოყენებისთვის.' },
 ];
 
 const ROLES = [
-  { icon: GraduationCap, role: 'მოსწავლე', bg: 'bg-[#2B4EFF]', steps: ['ნახე შენი ჯგუფის დავალებები', 'ჩააბარე ნამუშევარი ვადამდე', 'ნახე ქულები და შეფასება'] },
+  { icon: GraduationCap, role: 'სტუდენტი', bg: 'bg-[#2B4EFF]', steps: ['ნახე შენი ჯგუფის დავალებები', 'ჩააბარე ნამუშევარი ვადამდე', 'ნახე ქულები და შეფასება'] },
   { icon: BookOpen, role: 'მასწავლებელი', bg: 'bg-teal-600', steps: ['შექმენი დავალება, ჩასვი ვადა', 'ნახე ჩაბარებული ნამუშევრები', 'შეაფასე და დაუდე ქულა'] },
   { icon: Shield, role: 'ადმინი', bg: 'bg-violet-600', steps: ['მართე მომხმარებლები და ჯგუფები', 'გაანაწილე მასწავლებლები', 'ნახე სრული ანალიტიკა'] },
 ];
@@ -95,7 +100,7 @@ export default function DocumentationPage() {
           }}
         />
         {/* Colour accent — top right */}
-        <div className="absolute -top-20 -right-20 w-[500px] h-[500px] rounded-full bg-[#2B4EFF]/5 dark:bg-[#2B4EFF]/10 blur-3xl pointer-events-none" />
+        <div className="hero-accent absolute -top-20 -right-20 w-[500px] h-[500px] pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-5 sm:px-8 py-16 sm:py-24 lg:py-28">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_480px] gap-10 lg:gap-16 items-center">
@@ -115,7 +120,7 @@ export default function DocumentationPage() {
               </h1>
 
               <p className="text-[15px] sm:text-[17px] text-gray-500 dark:text-slate-300 leading-relaxed max-w-[480px]">
-                ერთი სივრცე — მოსწავლეებისთვის, მასწავლებლებისა და ადმინისტრაციისთვის.
+                ერთი სივრცე — სტუდენტებისთვის, მასწავლებლებისა და ადმინისტრაციისთვის.
                 დავალებები, ჩაბარება, შეფასება — ყველაფერი ციფრულად, ქართულ ენაზე.
               </p>
 
@@ -159,6 +164,7 @@ export default function DocumentationPage() {
               <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-gray-300/40 dark:shadow-black/50 bg-gray-100 dark:bg-slate-800" style={{ aspectRatio: '4/3' }}>
                 <Img
                   src={PHOTOS.hero}
+                  eager
                   alt="BTA სტუდენტები სწავლობენ"
                   className="w-full h-full object-cover"
                   style={{ position: 'absolute', inset: 0 }}
@@ -206,7 +212,7 @@ export default function DocumentationPage() {
                 ყველაფერი ერთ ადგილას
               </h2>
               <p className="text-[15px] text-gray-500 dark:text-slate-300 leading-relaxed">
-                BTA-ს სასწავლო პორტალი შეიქმნა სასწავლო პროცესის გასამარტივებლად. ნაცვლად ელ-ფოსტისა, Messenger-ისა და ქაღალდისა — სტრუქტურირებული, ნათელი სისტემა.
+                BTA-ს სასწავლო პორტალი შეიქმნა სასწავლო პროცესის გასამარტივებლად. ნაცვლად ელ-ფოსტისა, მიმოწერისა და ქაღალდისა — სტრუქტურირებული, ნათელი სისტემა.
               </p>
               <ul className="space-y-3">
                 {[
@@ -332,7 +338,7 @@ export default function DocumentationPage() {
                 <strong className="text-gray-700 dark:text-white font-semibold">ბიზნესისა და ტექნოლოგიების აკადემია</strong> — საქართველოს ერთ-ერთი ყველაზე გამოცდილი კოლეჯი. 30 წელზე მეტია ამზადებს სპეციალისტებს ბიზნესსა, ტექნოლოგიებსა, მედიცინასა და ხელოვნებაში.
               </p>
               <p className="text-[15px] text-gray-500 dark:text-slate-300 leading-relaxed">
-                ეს სასწავლო პორტალი BTA-ს სტუდენტებმა შექმნეს — ციფრული ეპოქის სასწავლო პროცესისთვის.
+                ეს სასწავლო პორტალი BTA-ს სტუდენტმა შექმნა — ციფრული ეპოქის სასწავლო პროცესისთვის.
               </p>
               <a
                 href="https://bta.edu.ge"

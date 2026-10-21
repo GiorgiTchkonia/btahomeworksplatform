@@ -1,3 +1,10 @@
+import ModalPortal from '@/components/ModalPortal';
+import StudentAssignmentCard from '@/components/StudentAssignmentCard';
+import { localizeError } from '@/lib/messages';
+import StorageFileButton from '@/components/StorageFileButton';
+import { useUploadDraft } from '@/lib/useUploadDraft';
+import { CollegeGroup } from '@/types';
+import { programmeLabel } from '@/lib/groups';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { 
@@ -18,21 +25,33 @@ import {
   Award
 } from 'lucide-react';
 import { StudentUser, SubjectProgress, Submission, StudentAssignmentWithStatus } from '@/types';
-import { getStudentDashboardData, submitHomework, uploadFile, cancelSubmission } from '@/lib/api';
+import { getStudentDashboardData, submitHomework, cancelSubmission, isValidSubmissionUrl } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useDialog } from '@/components/ui/DialogProvider';
 
 export default function StudentDashboardPage() {
+  const uploadDraft = useUploadDraft();
   const { showAlert, showConfirm } = useDialog();
   const [, navigate] = useLocation();
   const [user, setUser] = useState<StudentUser | null>(null);
   const [subjectsWithProgress, setSubjectsWithProgress] = useState<SubjectProgress[]>([]);
+  const [group, setGroup] = useState<CollegeGroup | null>(null);
   const [assignments, setAssignments] = useState<StudentAssignmentWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const futureDeadlines = assignments.map(assignment => new Date(assignment.dueDate).getTime()).filter(time => time >= now);
+    const nextDeadline = Math.min(...futureDeadlines);
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(nextDeadline - now + 1, 60_000));
+    const refresh = () => setNow(Date.now());
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [assignments, now]);
+
   // Filter state
-  const [filter, setFilter] = useState<'ALL' | 'TODO' | 'SUBMITTED' | 'APPROVED' | 'DECLINED'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'TODO' | 'SUBMITTED' | 'APPROVED' | 'DECLINED' | 'OVERDUE'>('ALL');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
 
   // Submit Modal State
@@ -48,11 +67,17 @@ export default function StudentDashboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  const closeSubmitModal = () => {
+    if (uploading || submitting) return;
+    uploadDraft.discard();
+    setSubmitModalOpen(false);
+  };
+
   // Lock body scroll and handle Escape key for modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && submitModalOpen) {
-        setSubmitModalOpen(false);
+        closeSubmitModal();
       }
     };
 
@@ -68,7 +93,7 @@ export default function StudentDashboardPage() {
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [submitModalOpen]);
+  }, [submitModalOpen, uploading, submitting]);
 
   const loadData = async () => {
     try {
@@ -86,6 +111,9 @@ export default function StudentDashboardPage() {
         return;
       }
       setUser(profile as StudentUser);
+      const { data: collegeGroup, error: groupError } = await supabase.from('college_groups').select('*').eq('id', profile.group_id).single();
+      if (groupError) throw groupError;
+      setGroup(collegeGroup);
 
       const data = await getStudentDashboardData(session.user.id);
       setSubjectsWithProgress(data.subjectsWithProgress);
@@ -100,6 +128,9 @@ export default function StudentDashboardPage() {
 
   useEffect(() => {
     loadData();
+    const refresh = () => { void loadData(); };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,18 +141,19 @@ export default function StudentDashboardPage() {
     setSubmitError('');
 
     try {
-      const result = await uploadFile(file);
+      const result = await uploadDraft.upload(file, { studentId: user?.id, allowedFormats: currentAssignment?.allowedFormats });
       setFileUrl(result.fileUrl);
       setFileName(result.fileName);
       setFileSize(result.fileSize);
     } catch (err: any) {
-      setSubmitError(err.message || 'ფაილის ატვირთვა ვერ მოხერხდა');
+      setSubmitError(localizeError(err, 'ფაილის ატვირთვა ვერ მოხერხდა'));
     } finally {
       setUploading(false);
     }
   };
 
-  const openSubmitModal = (assignment: any) => {
+  const openSubmitModal = (assignment: StudentAssignmentWithStatus) => {
+    uploadDraft.discard();
     setCurrentAssignment(assignment);
     setFileUrl(assignment.submission?.fileUrl || '');
     setFileName(assignment.submission?.fileName || '');
@@ -146,7 +178,7 @@ export default function StudentDashboardPage() {
         setSubmitError('გთხოვთ მიუთითოთ ბმული');
         return;
       }
-      const isGoogleLink = submissionLink.includes('drive.google.com') || submissionLink.includes('docs.google.com');
+      const isGoogleLink = isValidSubmissionUrl(submissionLink);
       if (!isGoogleLink) {
         setSubmitError('გთხოვთ მიუთითოთ მხოლოდ Google Drive-ის ან Google Docs-ის ბმული');
         return;
@@ -166,28 +198,30 @@ export default function StudentDashboardPage() {
         studentComment,
       });
 
+      uploadDraft.saved(submitMode === 'FILE' ? fileUrl : undefined);
       setSubmitModalOpen(false);
       loadData();
     } catch (err: any) {
       console.error(err);
-      setSubmitError(err.message || 'დაფიქსირდა შეცდომა');
+      setSubmitError(localizeError(err, 'დაფიქსირდა შეცდომა'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleCancelSubmission = (assignment: any) => {
+  const handleCancelSubmission = (assignment: StudentAssignmentWithStatus) => {
     if (!assignment.submission) return;
+    const submissionId = assignment.submission.id;
     showConfirm(
       'დავალების წაშლა',
       'დარწმუნებული ხართ, რომ გსურთ ატვირთული დავალების წაშლა?',
       async () => {
         try {
-          await cancelSubmission(assignment.submission.id);
+          await cancelSubmission(submissionId);
           loadData();
         } catch (err: any) {
           console.error(err);
-          showAlert(err.message || 'ფაილის წაშლა ვერ მოხერხდა', 'error');
+          showAlert(localizeError(err, 'ფაილის წაშლა ვერ მოხერხდა'), 'error');
         }
       }
     );
@@ -199,37 +233,40 @@ export default function StudentDashboardPage() {
       if (selectedSubjectFilter !== 'ALL' && a.subjectId !== selectedSubjectFilter) {
         return false;
       }
-      const isPastDue = new Date(a.dueDate).getTime() < Date.now();
+      const isPastDue = new Date(a.dueDate).getTime() < now;
       const status = a.submission ? a.submission.status : (isPastDue ? 'OVERDUE' : 'TODO');
 
       if (filter === 'ALL') return true;
-      if (filter === 'TODO') return status === 'TODO' || status === 'DECLINED';
+      if (filter === 'TODO') return status === 'TODO' || (status === 'DECLINED' && !isPastDue);
       if (filter === 'SUBMITTED') return status === 'SUBMITTED';
       if (filter === 'APPROVED') return status === 'APPROVED';
-      if (filter === 'DECLINED') return status === 'DECLINED' || status === 'OVERDUE';
+      if (filter === 'DECLINED') return status === 'DECLINED';
+      if (filter === 'OVERDUE') return status === 'OVERDUE';
       return true;
     });
-  }, [assignments, filter, selectedSubjectFilter]);
+  }, [assignments, filter, selectedSubjectFilter, now]);
 
   const {
     totalAssignmentsCount,
     approvedCount,
     pendingCount,
     declinedCount,
+    overdueCount,
     todoCount,
   } = useMemo(() => {
     const total = assignments.length;
-    let approved = 0, pending = 0, declined = 0, todo = 0;
+    let approved = 0, pending = 0, declined = 0, overdue = 0, todo = 0;
 
     for (const a of assignments) {
-      const isPastDue = new Date(a.dueDate).getTime() < Date.now();
+      const isPastDue = new Date(a.dueDate).getTime() < now;
       const status = a.submission ? a.submission.status : (isPastDue ? 'OVERDUE' : 'TODO');
       
       if (status === 'APPROVED') approved++;
       else if (status === 'SUBMITTED') pending++;
-      else if (status === 'DECLINED' || status === 'OVERDUE') declined++;
+      else if (status === 'DECLINED') declined++;
+      else if (status === 'OVERDUE') overdue++;
       
-      if (status === 'TODO' || status === 'DECLINED') todo++;
+      if (status === 'TODO' || (status === 'DECLINED' && !isPastDue)) todo++;
     }
 
     return {
@@ -237,9 +274,10 @@ export default function StudentDashboardPage() {
       approvedCount: approved,
       pendingCount: pending,
       declinedCount: declined,
+      overdueCount: overdue,
       todoCount: todo,
     };
-  }, [assignments]);
+  }, [assignments, now]);
 
   if (loading) {
     return (
@@ -271,20 +309,25 @@ export default function StudentDashboardPage() {
   return (
     <div className="space-y-8 pb-16">
       {/* Header Banner */}
-      <div className="bg-white dark:bg-slate-800 rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-br from-white via-white to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-indigo-950/60 rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative overflow-hidden">
         
         {/* Subtle decorative background */}
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full border-[20px] border-indigo-50/50 pointer-events-none"></div>
-        <div className="absolute bottom-0 right-32 -mb-12 w-40 h-40 rounded-full border-[10px] border-indigo-50/50 pointer-events-none"></div>
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full border-[20px] border-indigo-100/60 dark:border-indigo-500/10 pointer-events-none"></div>
+        <div className="absolute bottom-0 right-32 -mb-12 w-40 h-40 rounded-full border-[10px] border-indigo-100/60 dark:border-indigo-500/10 pointer-events-none"></div>
 
         <div className="space-y-3 max-w-2xl relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-xs font-bold text-indigo-700 dark:text-indigo-300">
             <GraduationCap className="w-3.5 h-3.5" />
-            <span>მოსწავლის პორტალი • {user?.grade || 'X კლასი'}</span>
+            <span>სტუდენტის პორტალი</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             გამარჯობა, {user?.name}! 👋
           </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-sm font-bold text-indigo-700 dark:text-indigo-300"><GraduationCap size={16} />ჩემი ჯგუფი: {group?.code}</span>
+            <span className="rounded-lg bg-slate-100 dark:bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">{group ? programmeLabel(group.programme_type) : ''}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{user?.grade || 'განათლება მითითებული არ არის'}</span>
+          </div>
           <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed max-w-xl">
             აქ ხედავთ თქვენს ყველა საშინაო დავალებას საგნების მიხედვით. შეგიძლიათ მარტივად ატვირთოთ რვეულის ფოტო ან ფაილი.
           </p>
@@ -311,7 +354,7 @@ export default function StudentDashboardPage() {
 
       {/* Per-Subject Progress Cards */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <span>ჩემი საგნების პროგრესი</span>
@@ -321,17 +364,28 @@ export default function StudentDashboardPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {subjectsWithProgress.map((sub) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4">
+          {subjectsWithProgress.map((sub, index) => {
             const isSelected = selectedSubjectFilter === sub.subjectId;
+            // Balance rows (five subjects become 3 + 2, seven become 4 + 3).
+            const count = subjectsWithProgress.length;
+            const rows = Math.ceil(count / 4);
+            const base = Math.floor(count / rows);
+            const extra = count % rows;
+            const rowSize = index < (base + 1) * extra ? base + 1 : base;
+            const desktopSpan = { 1: 'lg:col-span-12', 2: 'lg:col-span-6', 3: 'lg:col-span-4', 4: 'lg:col-span-3' }[rowSize];
+            const noWork = sub.totalAssignments === 0;
+            const progress = noWork ? 0 : sub.percentage;
 
             return (
               <button
                 key={sub.subjectId}
+                type="button"
+                aria-pressed={isSelected}
                 onClick={() => {
                   setSelectedSubjectFilter(isSelected ? 'ALL' : sub.subjectId);
                 }}
-                className={`text-left p-5 rounded-2xl border transition-all duration-200 ${
+                className={`min-w-0 text-left p-5 rounded-2xl border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-400/30 ${count % 2 && index === count - 1 ? 'sm:col-span-2' : ''} ${desktopSpan} ${
                   isSelected
                     ? 'bg-indigo-50 dark:bg-indigo-900/40 border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/90 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm'
@@ -344,24 +398,24 @@ export default function StudentDashboardPage() {
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                    {sub.percentage}%
+                    {noWork ? 'ჯერ არ დაწყებულა' : `${progress}%`}
                   </span>
                 </div>
 
-                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">{sub.subjectName}</h3>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base break-words">{sub.subjectName}</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{sub.teacherName}</p>
 
                 {/* Mini Progress Bar */}
                 <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
                   <div
                     className="h-full bg-indigo-600 rounded-full transition-all duration-500"
-                    style={{ width: `${sub.percentage}%` }}
+                    style={{ width: `${progress}%` }}
                   />
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   <span>
-                    {sub.completedAssignments} / {sub.totalAssignments} ჩაბარებული
+                    {noWork ? 'დავალება ჯერ არ დამატებულა' : `${sub.completedAssignments} / ${sub.totalAssignments} დადასტურებული`}
                   </span>
                   {sub.declinedAssignments > 0 && (
                     <span className="text-rose-600 font-bold">
@@ -427,7 +481,11 @@ export default function StudentDashboardPage() {
                 filter === 'DECLINED' ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
-              უარყოფილი
+              შესასწორებელი ({declinedCount})
+            </button>
+            <button type="button" onClick={() => setFilter('OVERDUE')}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold ${filter === 'OVERDUE' ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-300 shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
+              ვადაგადაცილებული ({overdueCount})
             </button>
           </div>
         </div>
@@ -440,262 +498,24 @@ export default function StudentDashboardPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">შეცვალეთ ფილტრი ან აირჩიეთ სხვა საგანი</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredAssignments.map((assignment) => {
-              const submission = assignment.submission as Submission | null;
-              const formattedDueDate = new Date(assignment.dueDate).toLocaleDateString('ka-GE', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-
-              const isPastDue = new Date(assignment.dueDate).getTime() < Date.now();
-              const status = submission ? submission.status : (isPastDue ? 'OVERDUE' : 'TODO');
-
-              return (
-                <div
-                  key={assignment.id}
-                  className={`bg-white dark:bg-slate-800 rounded-3xl p-5 sm:p-6 border transition-all ${
-                    (status === 'DECLINED' || status === 'OVERDUE')
-                      ? 'border-rose-300 shadow-md ring-2 ring-rose-100'
-                      : status === 'APPROVED'
-                      ? 'border-emerald-200/80 shadow-sm'
-                      : 'border-slate-200 dark:border-slate-700/90 shadow-sm hover:shadow-md'
-                  }`}
-                >
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-700">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100">
-                        {assignment.subjectName}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        მასწავლებელი: {assignment.teacherName}
-                      </span>
-                      <span
-                        className={`flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                          isPastDue && status !== 'APPROVED' && status !== 'SUBMITTED'
-                            ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border border-rose-200'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        ვადა: {formattedDueDate}
-                      </span>
-                    </div>
-
-                    {/* Status Badge */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      {status === 'APPROVED' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                          დადასტურებულია ✅
-                        </span>
-                      )}
-                      {status === 'DECLINED' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse">
-                          <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                          უარყოფილია ❌
-                        </span>
-                      )}
-                      {status === 'OVERDUE' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-                          <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                          ვადაგასულია
-                        </span>
-                      )}
-                      {status === 'SUBMITTED' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                          განსახილველია ⏳
-                        </span>
-                      )}
-                      {status === 'TODO' && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                          <Clock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                          ჩასაბარებელია
-                        </span>
-                      )}
-
-                      {/* Score / Grade Badge */}
-                      {submission?.grade !== null && submission?.grade !== undefined && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-sm">
-                          <Award className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                          შეფასება: {submission.grade}/10
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div className="py-4 space-y-3">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{assignment.title}</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">
-                      {assignment.description}
-                    </p>
-
-                    {/* Teacher attachment */}
-                    {assignment.attachmentUrl && (
-                      <div className="inline-flex max-w-full items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 overflow-hidden">
-                        <Paperclip className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                        <span className="shrink-0">დამხმარე მასალა:</span>
-                        <a
-                          href={assignment.attachmentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold flex items-center gap-1 truncate min-w-0"
-                        >
-                          <span className="truncate">{assignment.attachmentName || 'ფაილის გახსნა'}</span>
-                          <ExternalLink className="w-3 h-3 shrink-0" />
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Declined Warning Box */}
-                    {status === 'DECLINED' && submission?.teacherFeedback && (
-                      <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-sm space-y-1">
-                        <div className="flex items-center gap-1.5 font-bold text-rose-800">
-                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>მასწავლებლის კომენტარი / უარყოფის მიზეზი:</span>
-                        </div>
-                        <p className="text-rose-900 font-medium pl-5 break-words">
-                          "{submission.teacherFeedback}"
-                        </p>
-                        <p className="text-xs text-rose-700 dark:text-rose-400 pt-1 font-semibold pl-5">
-                          გთხოვთ შეასწოროთ ხარვეზი და ხელახლა ატვირთოთ ნამუშევარი.
-                        </p>
-                      </div>
-                    )}
-                    
-                    {/* Overdue message */}
-                    {status === 'OVERDUE' && (
-                      <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                        <span>დავალების ჩაბარების ვადა ამოიწურა, ჩაბარება შეუძლებელია.</span>
-                      </div>
-                    )}
-
-                    {/* Approved Feedback Box */}
-                    {status === 'APPROVED' && (submission?.teacherFeedback || (submission?.grade !== null && submission?.grade !== undefined)) && (
-                      <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
-                        <div className="flex items-center gap-2 font-bold">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span>მასწავლებლის შეფასება:</span>
-                          {submission?.grade !== null && submission?.grade !== undefined && (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-black">
-                              {submission.grade}/10 ქულა
-                            </span>
-                          )}
-                        </div>
-                        {submission?.teacherFeedback && (
-                          <p className="pl-6 text-emerald-900 dark:text-emerald-200 font-medium break-words">
-                            "{submission.teacherFeedback}"
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Previously submitted file/link info */}
-                    {submission && (
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium pt-1">
-                        <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-                        <span className="break-all">
-                          ჩაბარებული ნამუშევარი: 
-                          {submission.submissionLink ? (
-                            <a href={submission.submissionLink} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold ml-1 flex inline-flex items-center gap-1">
-                              ბმულის გახსნა <ExternalLink className="w-3 h-3" />
-                            </a>
-                          ) : (
-                            <strong className="ml-1">{submission.fileName} ({submission.fileSize})</strong>
-                          )}
-                        </span>
-                        <span>• დრო: {new Date(submission.submittedAt).toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Submission Action Footer */}
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="text-xs text-slate-400 dark:text-slate-500">
-                      {status === 'APPROVED'
-                        ? 'დავალება წარმატებით ჩაბარებულია'
-                        : status === 'SUBMITTED'
-                        ? 'მასწავლებელი ამოწმებს თქვენს ნამუშევარს'
-                        : status === 'DECLINED'
-                        ? 'საჭიროა ხელახალი ჩაბარება'
-                        : status === 'OVERDUE'
-                        ? 'დავალების ვადა ამოიწურა'
-                        : 'გადაუღეთ ფოტო რვეულს ან ატვირთეთ ფაილი'}
-                    </div>
-
-                    <div>
-                      {!isPastDue && status === 'TODO' && (
-                        <button
-                          onClick={() => openSubmitModal(assignment)}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-200 transition-all active:scale-95"
-                        >
-                          <Upload className="w-4 h-4" />
-                          დავალების ჩაბარება
-                        </button>
-                      )}
-
-                      {!isPastDue && status === 'DECLINED' && (
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                          <button
-                            onClick={() => openSubmitModal(assignment)}
-                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md shadow-rose-200 transition-all active:scale-95"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                            ხელახლა ჩაბარება
-                          </button>
-                          <button
-                            onClick={() => handleCancelSubmission(assignment)}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold text-sm transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                            წაშლა
-                          </button>
-                        </div>
-                      )}
-
-                      {!isPastDue && status === 'SUBMITTED' && (
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                          <button
-                            onClick={() => openSubmitModal(assignment)}
-                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            ფაილის შეცვლა
-                          </button>
-                          <button
-                            onClick={() => handleCancelSubmission(assignment)}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 font-bold text-xs transition-colors"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            წაშლა
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:[&>article:last-child:nth-child(odd)]:col-span-2">
+            {filteredAssignments.map(assignment => <StudentAssignmentCard key={assignment.id} assignment={assignment} now={now}
+              onSubmit={() => openSubmitModal(assignment)} onCancel={() => handleCancelSubmission(assignment)} />)}
           </div>
         )}
       </div>
 
       {/* Modal: Submit Homework */}
       {submitModalOpen && currentAssignment && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
-          onClick={() => setSubmitModalOpen(false)}
+        <ModalPortal><div
+          className="modal-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-sm"
+          onClick={closeSubmitModal}
         >
           <div 
             role="dialog"
             aria-modal="true"
             aria-labelledby="submit-modal-title"
-            className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+            className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-150 text-left"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -710,7 +530,7 @@ export default function StudentDashboardPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setSubmitModalOpen(false)}
+                onClick={closeSubmitModal}
                 aria-label="დახურვა"
                 className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center shrink-0 transition-colors"
               >
@@ -720,13 +540,20 @@ export default function StudentDashboardPage() {
 
             {/* Form with scrollable body and pinned footer */}
             <form onSubmit={handleSubmitHomework} className="flex flex-col flex-1 min-h-0">
-              <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="modal-scroll m-1.5 p-3.5 sm:p-[1.125rem] min-h-0 overflow-y-auto overscroll-contain flex-1 space-y-4">
                 {submitError && (
                   <div className="p-3 bg-rose-50 dark:bg-rose-900/30 border border-rose-200 text-rose-700 dark:text-rose-400 text-xs font-semibold rounded-xl flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{submitError}</span>
                   </div>
                 )}
+
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3 dark:border-slate-700 dark:bg-slate-900/40">
+                  <h4 className="font-bold text-sm">დავალების ინსტრუქცია</h4>
+                  <p className="whitespace-pre-line break-words text-sm leading-7 text-slate-600 dark:text-slate-300">{currentAssignment.description}</p>
+                  {currentAssignment.attachmentUrl && <StorageFileButton file={currentAssignment.attachmentUrl} className="text-sm font-bold text-indigo-600 dark:text-indigo-300 break-all">დამხმარე მასალა: {currentAssignment.attachmentName || 'ფაილის გახსნა'}</StorageFileButton>}
+                  {currentAssignment.submission?.teacherFeedback && <p className="rounded-xl bg-rose-50 dark:bg-rose-950/40 p-3 text-sm text-rose-700 dark:text-rose-300 whitespace-pre-line break-words">მასწავლებლის კომენტარი: {currentAssignment.submission.teacherFeedback}</p>}
+                </section>
 
                 {/* Upload or Link Toggle */}
                 <div>
@@ -790,7 +617,7 @@ export default function StudentDashboardPage() {
                           </span>
                           <input
                             type="file"
-                            accept={currentAssignment.allowedFormats && currentAssignment.allowedFormats.length > 0 ? currentAssignment.allowedFormats.join(',') : ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.pptx,.txt"}
+                            accept={currentAssignment.allowedFormats && currentAssignment.allowedFormats.length > 0 ? currentAssignment.allowedFormats.map(format => '.' + format.replace(/^\./, '')).join(',') : ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"}
                             disabled={uploading}
                             onChange={handleFileUpload}
                             className="hidden"
@@ -835,7 +662,7 @@ export default function StudentDashboardPage() {
               <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-3 shrink-0 bg-slate-50 dark:bg-slate-900/70">
                 <button
                   type="button"
-                  onClick={() => setSubmitModalOpen(false)}
+                  onClick={closeSubmitModal}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors"
                 >
                   გაუქმება
@@ -851,7 +678,7 @@ export default function StudentDashboardPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div></ModalPortal>
       )}
     </div>
   );

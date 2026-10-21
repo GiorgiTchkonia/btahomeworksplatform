@@ -34,7 +34,7 @@ export default function Navbar({ user, onLogout, onUserUpdated }: NavbarProps) {
     if (!user) return '';
     if (user.role === 'ADMIN') return 'ადმინისტრატორი';
     if (user.role === 'TEACHER') return (user as SafeTeacherUser).subject || 'მასწავლებელი';
-    return (user as SafeStudentUser).grade || 'მოსწავლე';
+    return (user as SafeStudentUser).grade || 'სტუდენტი';
   };
 
   const avatarGradient = () => {
@@ -46,7 +46,7 @@ export default function Navbar({ user, onLogout, onUserUpdated }: NavbarProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-b border-gray-100 dark:border-slate-800 shadow-[0_1px_0_0_#f3f4f6] dark:shadow-none transition-colors duration-300">
+      <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-[0_1px_0_0_#f3f4f6] dark:shadow-none transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <div className="flex items-center justify-between h-[60px] sm:h-[68px]">
 

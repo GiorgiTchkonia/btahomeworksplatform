@@ -18,8 +18,8 @@ export default function CustomCheckbox({ checked, onChange, label, description }
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
         />
-        <div className={"w-5 h-5 rounded border-2 transition-all duration-200 "} />
-        <Check className={"absolute w-3.5 h-3.5 text-white pointer-events-none transition-transform duration-200 "} />
+        <div className={`w-5 h-5 rounded border-2 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 ${checked ? 'bg-indigo-600 border-indigo-600' : 'bg-white dark:bg-slate-900 border-slate-400 dark:border-slate-500 group-hover:border-indigo-500'}`} />
+        {checked && <Check className="absolute w-3.5 h-3.5 text-white pointer-events-none" aria-hidden="true" />}
       </div>
       {(label || description) && (
         <div className="flex flex-col">

@@ -48,13 +48,13 @@ export default function WhitelistPage() {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold">
             <ShieldCheck className="w-4 h-4" />
-            <span>მომხმარებელთა დადასტურებული სია (Whitelist)</span>
+            <span>მომხმარებელთა დადასტურებული სია</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            რეგისტრირებული მასწავლებლები და მოსწავლეები
+            რეგისტრირებული მასწავლებლები და სტუდენტები
           </h1>
           <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-            პლატფორმაზე დაშვებული მასწავლებლები და მოსწავლეების Whitelist სია. მითითებული პირები შეძლებენ პლატფორმაზე შეუფერხებლად ავტორიზაციას.
+            პლატფორმაზე დაშვებული მასწავლებლები და სტუდენტების სია. მითითებული პირები შეძლებენ პლატფორმაზე შეუფერხებლად ავტორიზაციას.
           </p>
         </div>
 
@@ -128,7 +128,7 @@ export default function WhitelistPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100 font-bold text-lg">
               <GraduationCap className="w-5 h-5 text-emerald-600" />
-              <h2>მოსწავლეების სია ({students.length})</h2>
+              <h2>სტუდენტების სია ({students.length})</h2>
             </div>
 
             <div className="space-y-3">
@@ -190,7 +190,7 @@ export default function WhitelistPage() {
                 {selectedUser.name}
               </h3>
               <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">
-                {selectedUser.role === 'TEACHER' ? 'მასწავლებელი' : 'მოსწავლე'}
+                {selectedUser.role === 'TEACHER' ? 'მასწავლებელი' : 'სტუდენტი'}
               </p>
             </div>
 

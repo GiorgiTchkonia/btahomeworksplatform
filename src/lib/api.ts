@@ -1,5 +1,5 @@
-import { supabaseAdmin, isLocalAdminConfigured } from './supabase-admin';
 import { supabase } from './supabase';
+import { MIN_PASSWORD_LENGTH } from './messages';
 import {
   User,
   StudentAssignmentWithStatus,
@@ -42,8 +42,10 @@ export const MIME_MAP: Record<string, string[]> = {
 export function isValidSubmissionUrl(url: string | null | undefined): boolean {
   if (!url || typeof url !== 'string') return false;
   try {
+    if (/[\r\n\t]/.test(url.trim())) return false;
     const parsed = new URL(url.trim());
     if (parsed.protocol !== 'https:') return false;
+    if (parsed.username || parsed.password || parsed.port) return false;
     const allowedHosts = ['drive.google.com', 'docs.google.com'];
     return allowedHosts.includes(parsed.hostname.toLowerCase());
   } catch {
@@ -64,8 +66,7 @@ export function extractStoragePath(urlOrPath: string | null | undefined): string
 }
 
 /**
- * Generates an authenticated signed URL for private storage access,
- * falling back to public URL if signed URL creation is unavailable.
+ * Resolve private storage on demand. Never fall back to an inaccessible public URL.
  */
 export async function getFileViewUrl(fileUrlOrPath: string | null | undefined): Promise<string> {
   if (!fileUrlOrPath) return '';
@@ -73,21 +74,23 @@ export async function getFileViewUrl(fileUrlOrPath: string | null | undefined): 
     return fileUrlOrPath;
   }
   const storagePath = extractStoragePath(fileUrlOrPath);
-  if (!storagePath) return fileUrlOrPath;
-
-  try {
-    const { data, error } = await supabase.storage
-      .from('homework-files')
-      .createSignedUrl(storagePath, 3600);
-    if (!error && data?.signedUrl) {
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Signed URL generation failed, falling back to public URL:', err);
+  if (!storagePath) {
+    if (isValidSubmissionUrl(fileUrlOrPath)) return fileUrlOrPath;
+    throw new Error('ფაილის მისამართი არასწორია.');
   }
+  const { data, error } = await supabase.storage.from('homework-files').createSignedUrl(storagePath, 3600);
+  if (error || !data?.signedUrl) {
+    throw new Error('ფაილის გახსნა ვერ მოხერხდა. გადაამოწმეთ წვდომა და სცადეთ ხელახლა.');
+  }
+  return data.signedUrl;
+}
 
-  const { data } = supabase.storage.from('homework-files').getPublicUrl(storagePath);
-  return data.publicUrl || fileUrlOrPath;
+/** Only removes unreferenced files; storage RLS protects files attached to records. */
+export async function removeUnlinkedFile(fileUrlOrPath: string): Promise<void> {
+  const path = extractStoragePath(fileUrlOrPath);
+  if (!path) return;
+  const { error } = await supabase.storage.from('homework-files').remove([path]);
+  if (error) throw error;
 }
 
 // ---------------------------------------------------------
@@ -98,20 +101,21 @@ export async function uploadFile(
   options?: { studentId?: string; allowedFormats?: string[] }
 ) {
   const maxFileSize = 15 * 1024 * 1024;
+  if (file.size === 0) throw new Error('ცარიელი ფაილის ატვირთვა დაუშვებელია.');
   if (file.size > maxFileSize) {
     throw new Error('ფაილის ზომა არ უნდა აღემატებოდეს 15MB-ს.');
   }
 
   const fileExt = file.name.split('.').pop()?.toLowerCase();
   const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'txt', 'zip', 'rar'];
-  
-  if (!fileExt || !allowedExtensions.includes(fileExt)) {
+
+  if (!file.name.includes('.') || !fileExt || !allowedExtensions.includes(fileExt)) {
     throw new Error('ფაილის ფორმატი დაუშვებელია.');
   }
 
   // Validate against teacher's allowed formats if specified
   if (options?.allowedFormats && options.allowedFormats.length > 0) {
-    const normalizedAllowed = options.allowedFormats.map(fmt => fmt.toLowerCase().replace(/^\./, ''));
+    const normalizedAllowed = options.allowedFormats.flatMap(fmt => fmt.split(',').map(ext => ext.trim().toLowerCase().replace(/^\./, '')));
     if (!normalizedAllowed.includes(fileExt)) {
       throw new Error(`ფაილის ფორმატი (.${fileExt}) დაუშვებელია ამ დავალებისთვის. დაშვებული ფორმატებია: ${options.allowedFormats.join(', ')}`);
     }
@@ -142,11 +146,10 @@ export async function uploadFile(
   }
 
   // Organize under folder {userId} to comply with storage RLS policies
-  let folderId = options?.studentId;
-  if (!folderId) {
-    const { data: authData } = await supabase.auth.getUser();
-    folderId = authData?.user?.id || 'general';
-  }
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const folderId = authData?.user?.id;
+  if (authError || !folderId) throw new Error('ფაილის ასატვირთად საჭიროა ავტორიზაცია.');
+  if (options?.studentId && options.studentId !== folderId) throw new Error('სხვის საქაღალდეში ატვირთვა დაუშვებელია.');
 
   const fileName = `${crypto.randomUUID()}.${fileExt}`;
   const filePath = `${folderId}/${fileName}`;
@@ -157,15 +160,11 @@ export async function uploadFile(
 
   if (error) throw error;
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('homework-files')
-    .getPublicUrl(filePath);
-
   // Return formatted size (e.g., 2.1 MB) based on finalFile
   const sizeMb = finalFile.size / (1024 * 1024);
   const formattedSize = sizeMb < 1 ? `${Math.round(finalFile.size / 1024)} KB` : `${sizeMb.toFixed(1)} MB`;
 
-  return { fileUrl: publicUrl, fileName: file.name, fileSize: formattedSize };
+  return { fileUrl: filePath, fileName: file.name, fileSize: formattedSize };
 }
 
 // ---------------------------------------------------------
@@ -297,110 +296,84 @@ export async function submitHomework(params: {
     .select('due_date')
     .eq('id', params.assignmentId)
     .single();
-    
+
   if (assignmentError) throw new Error('დავალება ვერ მოიძებნა');
-  
+
   if (new Date(assignmentData.due_date).getTime() < Date.now()) {
     throw new Error('დავალების ჩაბარების ვადა ამოიწურა. ჩაბარება შეუძლებელია.');
   }
 
-  // Check if exists
-  const { data: existing } = await supabase.from('submissions')
-    .select('id, file_url')
+  if (!params.fileUrl && !params.submissionLink?.trim()) {
+    throw new Error('ჩაბარებას უნდა ჰქონდეს ფაილი ან ბმული.');
+  }
+
+  const { data: existing, error: existingError } = await supabase.from('submissions')
+    .select('id, file_url, submitted_at')
     .eq('assignment_id', params.assignmentId)
     .eq('student_id', params.studentId)
     .maybeSingle();
+  if (existingError) throw existingError;
 
-  // If re-uploading and file changed, cleanup old storage file
-  if (existing && existing.file_url && params.fileUrl && existing.file_url !== params.fileUrl) {
-    const oldPath = extractStoragePath(existing.file_url);
-    const newPath = extractStoragePath(params.fileUrl);
-    if (oldPath && oldPath !== newPath) {
-      try {
-        await supabase.storage.from('homework-files').remove([oldPath]);
-      } catch (storageErr) {
-        console.warn('Failed to cleanup old storage file on re-submission:', storageErr);
-      }
+  const payload = {
+    file_url: params.fileUrl || null,
+    file_name: params.fileName || null,
+    file_size: params.fileSize || null,
+    submission_link: params.submissionLink?.trim() || null,
+    student_comment: params.studentComment || '',
+    status: 'SUBMITTED',
+    teacher_feedback: null,
+    grade: null,
+    reviewed_at: null,
+    submitted_at: new Date().toISOString(),
+  };
+
+  // Protect against another tab replacing this submission between reading and saving.
+  const result = existing
+    ? await supabase.from('submissions').update(payload).eq('id', existing.id)
+        .eq('submitted_at', existing.submitted_at).select().maybeSingle()
+    : await supabase.from('submissions').insert({
+        ...payload, assignment_id: params.assignmentId,
+        student_id: params.studentId, student_name: params.studentName,
+      }).select().single();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('ნაშრომი უკვე შეიცვალა. განაახლეთ გვერდი და სცადეთ ხელახლა.');
+
+  // Commit first: failed saves must leave the previous file intact. This also cleans
+  // up the old file when switching from a file submission to a link submission.
+  if (existing?.file_url && extractStoragePath(existing.file_url) !== extractStoragePath(params.fileUrl)) {
+    try {
+      await removeUnlinkedFile(existing.file_url);
+    } catch (error) {
+      console.warn('Saved submission; old file cleanup must be retried:', error);
     }
   }
-
-  const now = new Date().toISOString();
-
-  if (existing) {
-    const { data, error } = await supabase.from('submissions').update({
-      file_url: params.fileUrl || null,
-      file_name: params.fileName || null,
-      file_size: params.fileSize || null,
-      submission_link: params.submissionLink || null,
-      student_comment: params.studentComment || '',
-      status: 'SUBMITTED',
-      teacher_feedback: null,
-      submitted_at: now,
-      reviewed_at: null
-    }).eq('id', existing.id).select().single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase.from('submissions').insert({
-      assignment_id: params.assignmentId,
-      student_id: params.studentId,
-      student_name: params.studentName,
-      file_url: params.fileUrl || null,
-      file_name: params.fileName || null,
-      file_size: params.fileSize || null,
-      submission_link: params.submissionLink || null,
-      student_comment: params.studentComment || '',
-      status: 'SUBMITTED',
-      submitted_at: now
-    }).select().single();
-    if (error) throw error;
-    return data;
-  }
+  return result.data;
 }
 
 export async function cancelSubmission(submissionId: string) {
-  // Get assignment ID and file_url for this submission
-  const { data: subData } = await supabase.from('submissions')
-    .select('assignment_id, file_url')
-    .eq('id', submissionId)
-    .single();
-
-  if (subData) {
-    const { data: assignmentData } = await supabase.from('assignments')
-      .select('due_date')
-      .eq('id', subData.assignment_id)
-      .single();
-
-    if (assignmentData && new Date(assignmentData.due_date).getTime() < Date.now()) {
-      throw new Error('დავალების ვადა ამოიწურა. ფაილის წაშლა ან შეცვლა შეუძლებელია.');
-    }
-
-    // Clean up stored file if present
-    if (subData.file_url) {
-      const storagePath = extractStoragePath(subData.file_url);
-      if (storagePath) {
-        try {
-          await supabase.storage.from('homework-files').remove([storagePath]);
-        } catch (storageErr) {
-          console.warn('Failed to delete storage file on cancellation:', storageErr);
-        }
-      }
+  // The database enforces deadline and ownership, including direct API requests.
+  const { data, error } = await supabase.from('submissions').delete()
+    .eq('id', submissionId).select('id, file_url').single();
+  if (error) throw error;
+  if (!data) throw new Error('ჩაბარება ვერ მოიძებნა ან მისი წაშლა დაუშვებელია.');
+  if (data.file_url) {
+    try {
+      await removeUnlinkedFile(data.file_url);
+    } catch (cleanupError) {
+      console.warn('Cancelled submission; file cleanup must be retried:', cleanupError);
     }
   }
-
-  const { error } = await supabase.from('submissions').delete().eq('id', submissionId);
-  if (error) throw error;
   return true;
 }
 
 // ---------------------------------------------------------
 // Teacher Dashboard
 // ---------------------------------------------------------
-export async function getTeacherDashboardData(teacherId: string) {
+export async function getTeacherDashboardData(teacherId: string, groupId?: string) {
   const [subjectsRes, assignmentsRes, submissionsRes, studentsRes] = await Promise.all([
     supabase.from('subjects').select('*').eq('teacher_id', teacherId),
     supabase.from('assignments').select('*').eq('teacher_id', teacherId),
-    supabase.from('submissions').select('assignment_id, status, profiles!inner(*)').eq('profiles.role', 'STUDENT'),
+    supabase.from('submissions').select('assignment_id, status, student_id'),
     supabase.from('profiles').select('*').eq('role', 'STUDENT'),
   ]);
 
@@ -410,13 +383,16 @@ export async function getTeacherDashboardData(teacherId: string) {
   if (studentsRes.error) throw new Error(studentsRes.error.message);
 
   const subjects = subjectsRes.data;
-  const assignments = assignmentsRes.data;
-  const submissions = submissionsRes.data;
-  const students = studentsRes.data;
+  const assignments = (assignmentsRes.data || []).filter(a => !groupId || a.group_ids?.includes(groupId));
+  const students = (studentsRes.data || []).filter(s => !groupId || s.group_id === groupId);
+  const studentIds = new Set(students.map(s => s.id));
+  const studentGroups = new Map(students.map(s => [s.id, s.group_id]));
+  const targets = new Map(assignments.map(a => [a.id, a.group_ids as string[]]));
+  const submissions = (submissionsRes.data || []).filter(s => studentIds.has(s.student_id) && targets.get(s.assignment_id)?.includes(studentGroups.get(s.student_id)));
   const totalStudents = students?.length || 0;
 
   const submissionCounts = new Map<string, { approved: number; declined: number; pending: number }>();
-  
+
   for (const asg of (assignments || [])) {
     submissionCounts.set(asg.id, { approved: 0, declined: 0, pending: 0 });
   }
@@ -436,6 +412,7 @@ export async function getTeacherDashboardData(teacherId: string) {
     const counts = submissionCounts.get(a.id) || { approved: 0, pending: 0, declined: 0 };
     return {
       id: a.id,
+      groupIds: a.group_ids || [],
       subjectId: a.subject_id,
       teacherId: a.teacher_id,
       title: a.title,
@@ -447,23 +424,25 @@ export async function getTeacherDashboardData(teacherId: string) {
       createdAt: a.created_at,
       subjectName: subjectMap.get(a.subject_id) || 'უცნობი',
       submissionsCount: counts.approved + counts.declined + counts.pending,
-      totalStudents
+      totalStudents: students.filter(s => a.group_ids?.includes(s.group_id)).length
     };
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  return { subjects: subjects || [], assignments: dashboardAssignments, totalStudents };
+  return { subjects: subjects || [], assignments: dashboardAssignments, totalStudents, students, submissions };
 }
 
 export async function createAssignment(params: CreateAssignmentParams) {
+  if (!params.groupIds?.length) throw new Error('აირჩიეთ მინიმუმ ერთი ჯგუფი');
   const { data, error } = await supabase.from('assignments').insert({
     subject_id: params.subjectId,
+    group_ids: [...new Set(params.groupIds)],
     teacher_id: params.teacherId,
     title: params.title,
     description: params.description,
     due_date: params.dueDate,
     attachment_url: params.attachmentUrl,
     attachment_name: params.attachmentName,
-    allowed_formats: params.allowedFormats || []
+    allowed_formats: [...new Set((params.allowedFormats || []).flatMap(fmt => fmt.split(',').map(ext => ext.trim().toLowerCase())))]
   }).select().single();
   if (error) throw error;
   return data;
@@ -476,18 +455,22 @@ export async function deleteAssignment(assignmentId: string) {
 }
 
 export async function updateAssignment(
-  assignmentId: string, 
+  assignmentId: string,
   updates: Partial<Assignment>
 ): Promise<Assignment | null> {
   const dbUpdates: Record<string, any> = {};
   if (updates.subjectId !== undefined) dbUpdates.subject_id = updates.subjectId;
+  if (updates.groupIds !== undefined) {
+    if (!updates.groupIds.length) throw new Error('აირჩიეთ მინიმუმ ერთი ჯგუფი');
+    dbUpdates.group_ids = [...new Set(updates.groupIds)];
+  }
   if (updates.teacherId !== undefined) dbUpdates.teacher_id = updates.teacherId;
   if (updates.title !== undefined) dbUpdates.title = updates.title;
   if (updates.description !== undefined) dbUpdates.description = updates.description;
   if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
   if (updates.attachmentUrl !== undefined) dbUpdates.attachment_url = updates.attachmentUrl;
   if (updates.attachmentName !== undefined) dbUpdates.attachment_name = updates.attachmentName;
-  if (updates.allowedFormats !== undefined) dbUpdates.allowed_formats = updates.allowedFormats;
+  if (updates.allowedFormats !== undefined) dbUpdates.allowed_formats = [...new Set(updates.allowedFormats.flatMap(fmt => fmt.split(',').map(ext => ext.trim().toLowerCase())))];
 
   const { data, error } = await supabase
     .from('assignments')
@@ -513,16 +496,18 @@ export async function updateAssignment(
   };
 }
 
-export async function getAssignmentDetails(assignmentId: string) {
+export async function getAssignmentDetails(assignmentId: string, groupId?: string) {
   const { data: assignment, error: error1 } = await supabase.from('assignments').select('*').eq('id', assignmentId).single();
   if (error1) throw new Error(error1.message);
   if (!assignment) return null;
+  const targetGroups: string[] = assignment.group_ids || [];
+  if (groupId && !targetGroups.includes(groupId)) throw new Error('დავალება ამ ჯგუფისთვის არ არის განკუთვნილი');
 
   const [subjectRes, teacherRes, submissionsRes, studentsRes] = await Promise.all([
     supabase.from('subjects').select('*').eq('id', assignment.subject_id).single(),
     supabase.from('profiles').select('*').eq('id', assignment.teacher_id).single(),
     supabase.from('submissions').select('*').eq('assignment_id', assignmentId),
-    supabase.from('profiles').select('*').eq('role', 'STUDENT'),
+    supabase.from('profiles').select('*').eq('role', 'STUDENT').in('group_id', groupId ? [groupId] : targetGroups),
   ]);
 
   if (subjectRes.error) throw new Error(subjectRes.error.message);
@@ -532,8 +517,9 @@ export async function getAssignmentDetails(assignmentId: string) {
 
   const subject = subjectRes.data;
   const teacher = teacherRes.data;
-  const submissions = submissionsRes.data;
   const students = studentsRes.data;
+  const rosterIds = new Set(students?.map(s => s.id));
+  const submissions = submissionsRes.data?.filter(s => rosterIds.has(s.student_id));
 
   let approvedCount = 0;
   let declinedCount = 0;
@@ -592,8 +578,8 @@ export async function getAssignmentDetails(assignmentId: string) {
 }
 
 export async function reviewSubmission(
-  submissionId: string, 
-  status: 'APPROVED' | 'DECLINED', 
+  submissionId: string,
+  status: 'APPROVED' | 'DECLINED',
   feedback: string,
   grade?: number | null
 ): Promise<void> {
@@ -627,156 +613,53 @@ export async function reviewSubmission(
 // Admin
 // ---------------------------------------------------------
 export async function getAllUsersForAdmin() {
-  const { data: profiles, error } = await supabase.from('profiles').select('*');
+  const [{ data: rawProfiles, error }, { data: states, error: statusError }] = await Promise.all([
+    supabase.from('profiles').select('*'), supabase.rpc('get_admin_account_states'),
+  ]);
   if (error) throw new Error(error.message);
+  if (statusError) throw new Error(statusError.message);
+  const statusMap = new Map((states || []).map((state: { id: string; account_status: string }) => [state.id, state.account_status]));
+  const profiles = rawProfiles?.map(profile => ({ ...profile, account_status: statusMap.get(profile.id) }));
   const teachers = profiles?.filter(p => p.role === 'TEACHER') || [];
   const students = profiles?.filter(p => p.role === 'STUDENT') || [];
   const admins = profiles?.filter(p => p.role === 'ADMIN') || [];
   return { teachers, students, admins };
 }
 
+async function invokeAdminAction(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('admin-users', { body });
+  if (error) {
+    // Preserve server validation errors instead of falling back to privileged browser access.
+    let message = 'მომხმარებლის მართვა ვერ მოხერხდა. გადაამოწმეთ admin-users ფუნქციის კონფიგურაცია.';
+    if ('context' in error && error.context instanceof Response) {
+      try {
+        const response = await error.context.clone().json();
+        if (typeof response.error === 'string') message = response.error;
+      } catch { /* Keep the actionable default for network or non-JSON failures. */ }
+    }
+    throw new Error(message);
+  }
+  if (!data?.success) throw new Error(data?.error || 'მომხმარებლის მართვა ვერ მოხერხდა.');
+  return data;
+}
+
 export async function addWhitelistUser(user: AddWhitelistUserData) {
-  // 1. Invoke Supabase Edge Function 'admin-users' first
-  try {
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'create', user }
-    });
-    if (!error && data?.user) {
-      return data.user;
-    }
-    if (error) {
-      console.warn('Edge Function admin-users invocation failed, attempting local fallback:', error);
-    }
-  } catch (edgeErr) {
-    console.warn('Edge Function admin-users threw error, attempting local fallback:', edgeErr);
-  }
-
-  // 2. Safe fallback for local development if Edge Function is offline
-  if (isLocalAdminConfigured()) {
-    console.warn('Executing addWhitelistUser via local supabaseAdmin fallback');
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: user.email,
-      password: user.password,
-      email_confirm: true
-    });
-    if (authError) throw new Error(authError.message);
-
-    const newUserId = authData.user.id;
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-      id: newUserId,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      grade: user.grade || null,
-      subject: user.subject || null,
-      phone: user.phone || null
-    });
-
-    if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(newUserId);
-      throw new Error(profileError.message);
-    }
-
-    return authData.user;
-  }
-
-  throw new Error('მომხმარებლის შექმნა მოითხოვს Edge Function-ს ან ადმინისტრატორის კონფიგურაციას.');
+  const data = await invokeAdminAction({ action: 'create', user });
+  return data.user;
 }
 
 export async function adminUpdateUser(userId: string, updates: AdminUpdateUserData) {
-  // 1. Invoke Supabase Edge Function 'admin-users' first
-  try {
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'update', userId, updates }
-    });
-    if (!error && (data?.success || data?.profile)) {
-      return true;
-    }
-    if (error) {
-      console.warn('Edge Function admin-users invocation failed, attempting local fallback:', error);
-    }
-  } catch (edgeErr) {
-    console.warn('Edge Function admin-users threw error, attempting local fallback:', edgeErr);
-  }
-
-  // 2. Safe fallback for local development if Edge Function is offline
-  if (isLocalAdminConfigured()) {
-    console.warn('Executing adminUpdateUser via local supabaseAdmin fallback');
-    const authUpdates: { email?: string; password?: string } = {};
-    if (updates.email) authUpdates.email = updates.email;
-    if (updates.password) authUpdates.password = updates.password;
-
-    if (Object.keys(authUpdates).length > 0) {
-      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
-      if (authError) throw new Error(authError.message);
-    }
-
-    const profileUpdates: {
-      name?: string;
-      role?: string;
-      email?: string;
-      subject?: string | null;
-      phone?: string | null;
-      grade?: string | null;
-    } = {};
-    if (updates.name) profileUpdates.name = updates.name;
-    if (updates.role) profileUpdates.role = updates.role;
-    if (updates.email) profileUpdates.email = updates.email;
-
-    if (updates.role === 'TEACHER') {
-      profileUpdates.subject = updates.subject || null;
-      profileUpdates.phone = updates.phone || null;
-      profileUpdates.grade = null;
-    } else if (updates.role === 'STUDENT') {
-      profileUpdates.grade = updates.grade || null;
-      profileUpdates.subject = null;
-      profileUpdates.phone = null;
-    } else if (updates.role === 'ADMIN') {
-      profileUpdates.grade = null;
-      profileUpdates.subject = null;
-      profileUpdates.phone = null;
-    }
-
-    if (Object.keys(profileUpdates).length > 0) {
-      const { error: profileError } = await supabaseAdmin.from('profiles').update(profileUpdates).eq('id', userId);
-      if (profileError) throw new Error(profileError.message);
-    }
-
-    return true;
-  }
-
-  throw new Error('მომხმარებლის განახლება მოითხოვს Edge Function-ს ან ადმინისტრატორის კონფიგურაციას.');
+  await invokeAdminAction({ action: 'update', userId, updates });
+  return true;
 }
 
 export async function deleteWhitelistUser(userId: string) {
-  // 1. Invoke Supabase Edge Function 'admin-users' first
-  try {
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'delete', userId }
-    });
-    if (!error && data?.success) {
-      return true;
-    }
-    if (error) {
-      console.warn('Edge Function admin-users invocation failed, attempting local fallback:', error);
-    }
-  } catch (edgeErr) {
-    console.warn('Edge Function admin-users threw error, attempting local fallback:', edgeErr);
-  }
-
-  // 2. Safe fallback for local development if Edge Function is offline
-  if (isLocalAdminConfigured()) {
-    console.warn('Executing deleteWhitelistUser via local supabaseAdmin fallback');
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (error) throw new Error(error.message);
-    return true;
-  }
-
-  throw new Error('მომხმარებლის წაშლა მოითხოვს Edge Function-ს ან ადმინისტრატორის კონფიგურაციას.');
+  await invokeAdminAction({ action: 'delete', userId });
+  return true;
 }
 
 export async function getWhitelist() {
-  const { data: profiles, error } = await supabase.from('profiles').select('id, name, role, subject, grade, email');
+  const { data: profiles, error } = await supabase.from('profiles').select('id, name, role, subject, grade, email, group_id');
   if (error) throw new Error(error.message);
   const teachers = profiles?.filter(p => p.role === 'TEACHER') || [];
   const students = profiles?.filter(p => p.role === 'STUDENT') || [];
@@ -789,6 +672,7 @@ export async function updateProfile(userId: string, email: string, updates: Upda
     subject?: string | null;
     phone?: string | null;
     grade?: string | null;
+    teaching_subjects?: string[];
   } = {};
   if (updates.name !== undefined) {
     if (typeof updates.name === 'string') {
@@ -800,7 +684,9 @@ export async function updateProfile(userId: string, email: string, updates: Upda
       payload.name = updates.name;
     }
   }
-  if (updates.subject !== undefined) {
+  if (updates.teaching_subjects !== undefined) {
+    payload.teaching_subjects = updates.teaching_subjects;
+  } else if (updates.subject !== undefined) {
     payload.subject = updates.subject ? (typeof updates.subject === 'string' ? updates.subject.trim() : updates.subject) : null;
   }
   if (updates.phone !== undefined) {
@@ -809,18 +695,9 @@ export async function updateProfile(userId: string, email: string, updates: Upda
   if (updates.grade !== undefined) {
     payload.grade = updates.grade ? (typeof updates.grade === 'string' ? updates.grade.trim() : updates.grade) : null;
   }
-  
-  if (Object.keys(payload).length > 0) {
-    const { error } = await supabase.from('profiles').update(payload).eq('id', userId);
-    if (error) throw error;
-  }
-  
-  if (updates.email) {
-    const { error } = await supabase.auth.updateUser({ email: updates.email });
-    if (error) throw error;
-  }
-  
+
   if (updates.newPassword) {
+    if (updates.newPassword.length < MIN_PASSWORD_LENGTH) throw new Error('პაროლი უნდა შეიცავდეს მინიმუმ 8 სიმბოლოს.');
     if (!currentPassword) {
       throw new Error('მიმდინარე პაროლი არასწორია');
     }
@@ -831,7 +708,19 @@ export async function updateProfile(userId: string, email: string, updates: Upda
     const { error } = await supabase.auth.updateUser({ password: updates.newPassword });
     if (error) throw error;
   }
-  
+
+
+  if (Object.keys(payload).length > 0) {
+    const { error } = await supabase.from('profiles').update(payload).eq('id', userId);
+    if (error) throw error;
+  }
+
+  if (updates.email) {
+    const { error } = await supabase.auth.updateUser({ email: updates.email.trim().toLowerCase() });
+    if (error) throw error;
+  }
+
+
   const { data: updatedProfile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
   if (profileError) throw profileError;
   return updatedProfile;

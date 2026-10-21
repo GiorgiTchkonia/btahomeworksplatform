@@ -36,15 +36,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               <AlertCircle className="w-8 h-8" />
               <h1 className="text-2xl font-bold">დაფიქსირდა შეცდომა</h1>
             </div>
-            <div className="bg-slate-100 dark:bg-slate-700 rounded-xl p-4 overflow-auto text-left">
-              <pre className="text-rose-600 text-sm font-mono whitespace-pre-wrap">
-                {this.state.error?.toString()}
-              </pre>
-              <br />
-              <pre className="text-slate-500 dark:text-slate-400 text-xs font-mono whitespace-pre-wrap">
-                {this.state.errorInfo?.componentStack}
-              </pre>
-            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">გვერდის ჩატვირთვა ვერ მოხერხდა. განაახლეთ გვერდი და სცადეთ ხელახლა.</p>
             <button
               onClick={() => window.location.reload()}
               className="mt-6 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors"

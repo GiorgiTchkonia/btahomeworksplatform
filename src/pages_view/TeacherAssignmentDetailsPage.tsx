@@ -1,3 +1,5 @@
+import { localizeError } from '@/lib/messages';
+import StorageFileButton from '@/components/StorageFileButton';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useRoute } from 'wouter';
 import { 
@@ -21,7 +23,7 @@ import {
   Save
 } from 'lucide-react';
 import { Assignment, Subject, Submission, StudentUser } from '@/types';
-import { getAssignmentDetails, reviewSubmission, updateAssignment } from '@/lib/api';
+import { getAssignmentDetails, reviewSubmission, updateAssignment, getFileViewUrl } from '@/lib/api';
 import { useDialog } from '@/components/ui/DialogProvider';
 import DateTimePicker from '@/components/DateTimePicker';
 import CustomCheckbox from '@/components/ui/CustomCheckbox';
@@ -54,6 +56,7 @@ export default function TeacherAssignmentDetailsPage() {
 
   // Search & Status Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [studentFilter, setStudentFilter] = useState(() => new URLSearchParams(window.location.search).get('student') || '');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
 
   // Review & Grading Modal State
@@ -78,6 +81,7 @@ export default function TeacherAssignmentDetailsPage() {
   // File Preview Modal state
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>('');
+  const [openingFile, setOpeningFile] = useState<string | null>(null);
 
   // Lock body scroll and handle Escape key for modals
   useEffect(() => {
@@ -111,7 +115,7 @@ export default function TeacherAssignmentDetailsPage() {
     try {
       setLoading(true);
       setLoadError(null);
-      const details = await getAssignmentDetails(assignmentId);
+      const details = await getAssignmentDetails(assignmentId, new URLSearchParams(window.location.search).get('group') || undefined);
       if (!details) {
         setLoadError('დავალება ვერ მოიძებნა');
         return;
@@ -193,7 +197,7 @@ export default function TeacherAssignmentDetailsPage() {
       await loadDetails();
     } catch (err: any) {
       console.error(err);
-      setReviewError(err?.message || 'შეცდომა შეფასების გაგზავნისას');
+      setReviewError(localizeError(err, 'შეცდომა შეფასების გაგზავნისას'));
     } finally {
       setSubmittingReview(false);
     }
@@ -243,7 +247,7 @@ export default function TeacherAssignmentDetailsPage() {
       await loadDetails();
     } catch (err: any) {
       console.error(err);
-      setEditError(err?.message || 'დავალების განახლება ვერ მოხერხდა');
+      setEditError(localizeError(err, 'დავალების განახლება ვერ მოხერხდა'));
     } finally {
       setSavingEdit(false);
     }
@@ -258,6 +262,7 @@ export default function TeacherAssignmentDetailsPage() {
   const filteredRoster = useMemo(() => {
     if (!data) return [];
     return data.studentRoster.filter(({ student, submission }) => {
+      if (studentFilter && student.id !== studentFilter) return false;
       // Search query filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
@@ -276,7 +281,7 @@ export default function TeacherAssignmentDetailsPage() {
 
       return true;
     });
-  }, [data, searchQuery, statusFilter]);
+  }, [data, searchQuery, statusFilter, studentFilter]);
 
   if (loading) {
     return (
@@ -385,22 +390,20 @@ export default function TeacherAssignmentDetailsPage() {
           <div className="inline-flex max-w-full items-center gap-2.5 p-3 bg-amber-50 dark:bg-amber-900/30 rounded-xl border border-amber-200 dark:border-amber-800 text-xs font-bold text-amber-900 dark:text-amber-200 overflow-hidden">
             <Paperclip className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="shrink-0">მიმაგრებული მასალა:</span>
-            <a
-              href={assignment.attachmentUrl}
-              target="_blank"
-              rel="noreferrer"
+            <StorageFileButton
+              file={assignment.attachmentUrl}
               className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 truncate min-w-0"
             >
               <span className="truncate">{assignment.attachmentName || 'ფაილის ჩამოტვირთვა'}</span>
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-            </a>
+            </StorageFileButton>
           </div>
         )}
 
         {/* Quick stats pills */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
           <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/60 text-center">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">მოსწავლეები</p>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">სტუდენტები</p>
             <p className="text-xl font-black text-slate-900 dark:text-slate-100">{data.totalStudents}</p>
           </div>
           <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800 text-center">
@@ -426,7 +429,7 @@ export default function TeacherAssignmentDetailsPage() {
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-            მოსწავლეთა სია & ნამუშევრები
+            სტუდენტთა სია & ნამუშევრები
           </h2>
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
             {data.pendingCount > 0 ? (
@@ -439,6 +442,7 @@ export default function TeacherAssignmentDetailsPage() {
 
         {/* ── Search Bar & Status Filter Pills ── */}
         <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4 shadow-sm">
+          {studentFilter && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-3"><span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{data.studentRoster.find(r=>r.student.id===studentFilter)?.student.name || 'არჩეული სტუდენტი'} · ნამუშევარი</span><button type="button" onClick={()=>{ setStudentFilter(''); setSearchQuery(''); setStatusFilter('ALL'); }} className="rounded-lg bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300">ყველა სტუდენტი</button></div>}
           {/* Search bar */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -446,7 +450,7 @@ export default function TeacherAssignmentDetailsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ძებნა მოსწავლის სახელით, კლასით ან ელფოსტით..."
+              placeholder="ძებნა სტუდენტის სახელით, კლასით ან ელფოსტით..."
               className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
             {searchQuery && (
@@ -535,7 +539,7 @@ export default function TeacherAssignmentDetailsPage() {
           {filteredRoster.length === 0 ? (
             <div className="p-12 text-center space-y-3">
               <Search className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto" />
-              <h4 className="text-base font-bold text-slate-800 dark:text-slate-200">მოსწავლე ვერ მოიძებნა</h4>
+              <h4 className="text-base font-bold text-slate-800 dark:text-slate-200">სტუდენტი ვერ მოიძებნა</h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                 მითითებული საძიებო პარამეტრებით მონაცემები არ არსებობს.
               </p>
@@ -621,15 +625,24 @@ export default function TeacherAssignmentDetailsPage() {
                             ) : submission.fileUrl ? (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPreviewFileUrl(submission.fileUrl || null);
-                                  setPreviewFileName(submission.fileName || '');
+                                disabled={openingFile !== null}
+                                onClick={async () => {
+                                  setOpeningFile(submission.id);
+                                  try {
+                                    const signedUrl = await getFileViewUrl(submission.fileUrl);
+                                    setPreviewFileUrl(signedUrl);
+                                    setPreviewFileName(submission.fileName || '');
+                                  } catch (error) {
+                                    showAlert(localizeError(error, 'ფაილის გახსნა ვერ მოხერხდა.'), 'error');
+                                  } finally {
+                                    setOpeningFile(null);
+                                  }
                                 }}
                                 className="inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800 transition-colors"
                               >
                                 <Eye className="w-3.5 h-3.5 shrink-0" />
                                 <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-md">
-                                  ნახვა: {submission.fileName} ({submission.fileSize})
+                                  {openingFile === submission.id ? 'იხსნება…' : 'ნახვა:'} {submission.fileName} ({submission.fileSize})
                                 </span>
                               </button>
                             ) : null}
@@ -638,7 +651,7 @@ export default function TeacherAssignmentDetailsPage() {
                           {/* Student Comment */}
                           {submission.studentComment && (
                             <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700/60 inline-block break-words max-w-full">
-                              💬 <span className="font-semibold">მოსწავლის კომენტარი:</span> {submission.studentComment}
+                              💬 <span className="font-semibold">სტუდენტის კომენტარი:</span> {submission.studentComment}
                             </p>
                           )}
 
@@ -724,7 +737,7 @@ export default function TeacherAssignmentDetailsPage() {
                   {reviewStatus === 'APPROVED' ? 'ნაშრომის შეფასება & დადასტურება' : 'ნაშრომის უარყოფა & ხარვეზის მითითება'}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  მოსწავლე: <strong className="text-slate-700 dark:text-slate-300">{activeStudentName}</strong>
+                  სტუდენტი: <strong className="text-slate-700 dark:text-slate-300">{activeStudentName}</strong>
                 </p>
               </div>
               <button
